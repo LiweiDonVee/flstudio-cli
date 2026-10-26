@@ -30,6 +30,8 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     template, spec = fixture(tmp_path)
     original = template.read_bytes()
     assert Project(original).encode() == original, 'Untouched vendor events must round-trip byte-for-byte'
+    limiter_template = template.parent.parent / 'Basic with limiter/Basic with limiter.flp'
+    assert Project.read(limiter_template).mixer()[0]['plugins'][0]['name'] == 'Emphasizer', 'Factory Master FX must stay on Master'
     project = create_project(spec, template)
     output = project.save(tmp_path / 'built.flp')
     saved = output.read_bytes()

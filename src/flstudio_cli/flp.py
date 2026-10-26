@@ -350,9 +350,9 @@ class Project:
             if self.events[index].id == 147:
                 spans.append((start, index + 1))
                 start = index + 1
-        # FL writes the special Current insert before Master. UI/API order is
-        # Master, ordinary inserts, Current; parameter records use that order.
-        return spans[1:] + spans[:1] if spans else []
+        # The installed factory projects store Master first, then ordinary
+        # inserts, then Current. This is also the parameter-record order.
+        return spans
 
     def mixer(self) -> list[dict]:
         tracks = []
