@@ -188,6 +188,8 @@ class Project:
 
     def playlist_record_size(self) -> int:
         parts = tuple(int(x) for x in self.version.split('.')[:2])
+        if parts >= (26, 0):
+            return 88
         if parts >= (21, 2):
             return 80
         return 60 if parts >= (21, 0) else 32
@@ -292,8 +294,10 @@ class Project:
                 raise ValueError('Playlist clip must reference an existing pattern and valid track/ticks')
             record = struct.pack('<IHHIHHHH4sII', pos, 20480, 20480 + pat, length, 500 - track,
                                  0, 120, 64, bytes([64, 100, 128, 128]), 0xffffffff, 0xffffffff)
-            if size == 80:
+            if size >= 80:
                 record += struct.pack('<I', uid) + bytes(28) + struct.pack('<d', 1.0) + bytes(8)
+                if size == 88:
+                    record += bytes(8)
             elif size == 60:
                 record += struct.pack('<I', uid) + bytes(24)
             records.append(record)

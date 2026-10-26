@@ -51,6 +51,12 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     assert changed.channels()[0]['pan_raw'] == -2000
     assert changed.mixer()[1]['volume_raw'] == 10000
     assert output.read_bytes() == saved and template.read_bytes() == original
+    native = Project.read(limiter_template)
+    native.replace_notes(3, 0, [dict(spec['patterns'][0]['scores'][0]['notes'][0], start_tick=384)])
+    native.set_playlist([{'pattern_number': 3, 'track': 1, 'start_tick': 0, 'length_tick': 768}])
+    native_copy = Project.read(native.save(tmp_path / 'native-edited.flp'))
+    assert len(next(e.data for e in native_copy.events if e.id == 233)) == 88, 'FL26 stores fresh Playlist items in 88-byte records'
+    assert native_copy.playlist()[0]['length_tick'] == 768
 
 
 def test_cli_build_preview_and_source_preservation(tmp_path):
