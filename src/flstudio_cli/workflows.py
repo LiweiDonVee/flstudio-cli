@@ -126,7 +126,7 @@ def register(app, emit, json_option):
     def edit(source, request, output, dry_run):
         """Apply explicit note/channel/playlist/mixer changes to a new FLP copy."""
         changes = read_json(request)
-        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects'}:
+        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects', 'plugin_params'}:
             raise ValueError('Unknown project edit section')
         doc = Project.read(source)
         if 'tempo_bpm' in changes:
@@ -145,6 +145,8 @@ def register(app, emit, json_option):
             doc.set_mixer(mixer['track'], {k: v for k, v in mixer.items() if k != 'track'})
         for effect in changes.get('effects', []):
             doc.load_effect(effect['track'], effect['slot'], effect['preset'])
+        for parameter in changes.get('plugin_params', []):
+            doc.set_plugin_parameter(parameter['track'], parameter['slot'], parameter['param'], parameter['value'])
         data = {'source': str(source.resolve()), 'output': str(output.resolve()),
                 'after': doc.inspect(), 'live_applied': False}
         if dry_run:
@@ -155,8 +157,26 @@ def register(app, emit, json_option):
         readback = Project.read(output)
         if readback.inspect()['patterns'] != data['after']['patterns']:
             raise ValueError('Note readback mismatch after saving')
+        if readback.channels() != doc.channels() or readback.mixer() != doc.mixer():
+            raise ValueError('Channel or mixer readback mismatch after saving')
         emit(Result(command='project edit', status='artifact_ready',
-                    verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist', 'saved_mixer'], data=data))
+                    verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist', 'saved_mixer'] +
+                    (['saved_plugin_param'] if changes.get('plugin_params') else []), data=data))
+
+    @app.group('plugin')
+    @json_option
+    def plugin_group():
+        """Read supported saved effect parameters without touching live FL."""
+
+    @plugin_group.command('params')
+    @click.option('--project', required=True, type=click.Path(path_type=Path))
+    @click.option('--track', required=True, type=click.IntRange(0, 125))
+    @click.option('--slot', required=True, type=click.IntRange(0, 9))
+    @json_option
+    def saved_params(project, track, slot):
+        doc = Project.read(project)
+        emit(Result(command='plugin params', status='verified', verified_scopes=['saved_plugin_param'],
+                    data=doc.plugin_parameters(track, slot)))
 
     @app.group('render')
     @json_option

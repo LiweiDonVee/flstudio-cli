@@ -57,6 +57,12 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     native_copy = Project.read(native.save(tmp_path / 'native-edited.flp'))
     assert len(next(e.data for e in native_copy.events if e.id == 233)) == 88, 'FL26 stores fresh Playlist items in 88-byte records'
     assert native_copy.playlist()[0]['length_tick'] == 768
+    previous = native_copy._effect_state(0, 9)[1].data
+    native_copy.set_plugin_parameter(0, 9, 'Emphasis', .25)
+    param_copy = Project.read(native_copy.save(tmp_path / 'one-param.flp'))
+    assert param_copy.plugin_parameters(0, 9)['params'][0]['v'] == .25
+    actual = param_copy._effect_state(0, 9)[1].data
+    assert actual[:8] == previous[:8] and actual[12:] == previous[12:]
 
 
 def test_cli_build_preview_and_source_preservation(tmp_path):
@@ -74,6 +80,12 @@ def test_cli_build_preview_and_source_preservation(tmp_path):
     stored = output.read_bytes()
     duplicate = runner.invoke(app, args)
     assert duplicate.exit_code != 0 and output.read_bytes() == stored
+    for command in ([ 'set-tempo', '--bpm', '123'],
+                    ['set-mixer-pan', '--track', '1', '--value', '.25'],
+                    ['set-plugin-param', '--track', '0', '--slot', '9', '--param', 'Emphasis', '--value', '.25']):
+        preview = runner.invoke(app, ['live', '--bridge-port', '1', *command, '--dry-run'])
+        assert preview.exit_code == 0 and json.loads(preview.output)['data']['bridge_contacted'] is False
+    assert output.read_bytes() == stored
 
 
 def test_unknown_events_and_json_numbers_are_not_silently_corrupted(tmp_path):

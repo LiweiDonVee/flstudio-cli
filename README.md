@@ -1,9 +1,9 @@
 # FL Studio CLI
 
-独立的 **0.2.0** 本地 CLI，已能创建可由真实 FL Studio 打开和渲染的工程。
+**0.3.0** 本地 CLI，可创建和编辑真实 FL 工程，并调用 FL 原生渲染。
 
 实际工作流：**JSON 编曲 → 新 FLP 副本 → 逐 Pattern/通道回读 → FL 原生 WAV 渲染**。
-不再依赖当前卷帘、抢焦点、快捷键脚本或旧 MCP 进程。
+文件编曲不依赖当前卷帘、抢焦点、快捷键脚本或 MCP。可选的 `live` 命令复用已有本地 MIDI 桥，直接操作打开的 FL。
 
 ```powershell
 uv tool install --editable . --python 3.12
@@ -35,6 +35,20 @@ flstudio project edit --input song.flp --request changes.json --output mixed.flp
 flstudio audio inspect --input mix.wav
 flstudio capabilities
 ```
+
+已有 MIDI 桥已连通时，还可直接修改当前会话：
+
+```powershell
+flstudio live status
+flstudio live set-tempo --bpm 130
+flstudio live set-mixer-pan --track 1 --value 0.25
+flstudio live plugin-params --track 0 --slot 9
+flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value 0.25
+```
+
+`live` 通过已有 `127.0.0.1:9787` MIDI 桥操作宿主 API，需该桥和 FL 控制器已配置。
+不启动 MCP 前端或修改端口配置；`--dry-run` 不连接桥。实际值未收敛时返回 `unknown`，没有保存工程。
+保存文件的单参数修改见 [0.3 用法与验证](docs/release-0.3.md)。
 
 写入命令操作保存的工程副本，**不会把改动偷偷写进当前打开的 GUI**。
 结果中的 `artifact_ready` 证明文件已写入并回读；`fl_engine_export` 证明 FL 真正打开并导出了它。

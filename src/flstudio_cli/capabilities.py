@@ -32,10 +32,20 @@ def list_capabilities() -> list[dict]:
                                                    'Fresh fixed-layout Playlist clips; unknown edited layouts are rejected'],
                                       last_evidence='docs/release-0.2.md: ' + scope))
     external = {
-        'live.attach': 'Not integrated; file edits never pretend to change the open editor',
+        'live.native_attach': 'Native process attachment is not integrated; optional live commands use the existing MIDI bridge',
         'plugin.arbitrary_ui': 'Native plugin UI controls without a file-state profile remain GUI operations',
         "automation": "R6: external native linear-clip subset",
     }
+    for operation in ('live.status', 'live.set_tempo', 'live.set_mixer_pan', 'live.plugin_params', 'live.set_plugin_param'):
+        implemented.append(Capability(operation=operation, implemented=True, availability='available',
+                                      verification_level='live', backend='existing_midi_bridge',
+                                      limitations=['Requires the separately installed and configured local MIDI bridge',
+                                                   'Does not save the open editor; unconfirmed readback returns unknown'],
+                                      last_evidence='docs/release-0.3.md'))
+    implemented.append(Capability(operation='plugin.saved_param', implemented=True, availability='available',
+                                  verification_level='audio', backend='flp_file',
+                                  limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque'],
+                                  last_evidence='docs/release-0.3.md'))
     for operation, evidence in external.items():
         implemented.append(Capability(operation=operation, implemented=False, availability="not_implemented",
                                       verification_level="source_only", backend=None,

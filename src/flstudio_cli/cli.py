@@ -288,3 +288,5 @@ def main() -> None:
 
 from .workflows import register as register_workflows
 register_workflows(app, _emit, json_option)
+from .live import register as register_live
+register_live(app, _emit, json_option)

@@ -499,6 +499,46 @@ class Project:
                 position = i + 1
         raise ValueError('Effect slot was not found in the mixer profile')
 
+    def _effect_state(self, track: int, slot: int):
+        spans = self.mixer_spans()
+        if type(track) is not int or not 0 <= track < len(spans) - 1 or type(slot) is not int or not 0 <= slot < 10:
+            raise ValueError('Choose an existing mixer track and slot 0..9')
+        start, end = spans[track]
+        name, state = None, None
+        for event in self.events[start:end]:
+            if event.id == 201:
+                name, state = text(event.data), None
+            elif event.id == 213:
+                state = event
+            elif event.id == 98:
+                if int.from_bytes(event.data, 'little') == slot:
+                    if name is None or state is None:
+                        raise ValueError('Effect slot is empty')
+                    return name, state
+                name, state = None, None
+        raise ValueError('Effect slot is absent')
+
+    def plugin_parameters(self, track: int, slot: int) -> dict:
+        name, state = self._effect_state(track, slot)
+        # This profile is backed by matching FL native-save and live API
+        # values. Unknown plugin blobs remain opaque rather than guessed.
+        if name != 'Emphasizer' or len(state.data) != 29 or state.data[:4] != struct.pack('<I', 2):
+            raise ValueError('No saved-parameter profile for this plugin state; use live plugin-params')
+        value = struct.unpack_from('<I', state.data, 8)[0] / 10000
+        return {'track': track, 'slot': slot, 'plugin': name,
+                'params': [{'i': 1, 'name': 'Emphasis', 'v': value}],
+                'limitations': ['Saved-state profile exposes Emphasis only; live API lists other host parameters']}
+
+    def set_plugin_parameter(self, track: int, slot: int, param: str, value: float) -> dict:
+        before = self.plugin_parameters(track, slot)
+        if param != 'Emphasis' or isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 1:
+            raise ValueError('Saved-state profile accepts Emphasis with a finite normalized value 0..1')
+        _, state = self._effect_state(track, slot)
+        data = bytearray(state.data)
+        struct.pack_into('<I', data, 8, round(value * 10000))
+        state.data = bytes(data)
+        return {'before': before, 'after': self.plugin_parameters(track, slot)}
+
 
 def create_project(spec: dict, template: Path) -> Project:
     """Create a Sampler project from a real installed empty/basic template."""
