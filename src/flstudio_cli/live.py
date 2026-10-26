@@ -6,6 +6,7 @@ newline JSON transport directly, without importing or launching an MCP server.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 import socket
 import time
 
@@ -13,6 +14,13 @@ import click
 
 from .contracts import Result
 from .json_output import canonical_json, decode_json
+
+READ_COMMANDS = {
+    'ping', 'get_tempo', 'get_project_state', 'get_play_state', 'get_song_position',
+    'mixer_list_tracks', 'mixer_get_track', 'mixer_get_routing', 'mixer_get_routing_all',
+    'channel_list', 'channel_get', 'channel_routing_summary', 'mixer_get_peaks',
+    'plugin_list', 'plugin_get_params', 'plugin_get_param', 'pattern_list', 'pattern_get_length',
+}
 
 
 class Bridge:
@@ -59,7 +67,7 @@ def register(app, emit, json_option):
             raise
         except (OSError, RuntimeError) as error:
             emit(Result(command=command, status='failed', reason_code='live_bridge_error',
-                        data={'message': str(error), 'backend': 'existing_midi_bridge'}))
+                        data={'message': str(error), 'backend': 'local_midi_bridge'}))
             raise click.exceptions.Exit(5)
 
     def write(command, bridge, setter, params, getter, read_params, field, value, dry_run):
@@ -81,7 +89,7 @@ def register(app, emit, json_option):
             emit(Result(command=command, status='verified' if confirmed else 'unknown',
                         reason_code=None if confirmed else 'live_value_not_confirmed',
                         verified_scopes=['live_value'] if confirmed else [],
-                        data={'backend': 'existing_midi_bridge', 'before': before, 'after': after,
+                        data={'backend': 'local_midi_bridge', 'before': before, 'after': after,
                               'submitted': True, 'live_applied': True if confirmed else None,
                               'source_file_saved': False}))
             if not confirmed:
@@ -93,7 +101,7 @@ def register(app, emit, json_option):
     @json_option
     def status(bridge):
         execute('live status', lambda: emit(Result(command='live status', status='verified',
-                verified_scopes=['live_project_state'], data={'backend': 'existing_midi_bridge',
+                verified_scopes=['live_project_state'], data={'backend': 'local_midi_bridge',
                 'project': bridge.call('get_project_state')})))
 
     @live.command('set-tempo')
@@ -158,3 +166,65 @@ def register(app, emit, json_option):
             write('live set-plugin-param', bridge, 'plugin_set_param', {**target, 'value': value},
                   'plugin_get_param', target, 'v', value, False)
         execute('live set-plugin-param', apply)
+
+    @live.command('query')
+    @click.option('--command', required=True, type=click.Choice(sorted(READ_COMMANDS)))
+    @click.option('--params-file', type=click.Path(path_type=Path))
+    @click.pass_obj
+    @json_option
+    def query(bridge, command, params_file):
+        """Read a controller primitive; parameter names are in docs/live-commands.md."""
+        params = {} if params_file is None else decode_json(params_file.read_text(encoding='utf-8-sig'))
+        if not isinstance(params, dict):
+            raise ValueError('Query parameters must be a JSON object')
+        execute('live query', lambda: emit(Result(command='live query', status='verified',
+                verified_scopes=['live_readback'], data={'command': command, 'result': bridge.call(command, params)})))
+
+    @live.command('apply')
+    @click.option('--request', required=True, type=click.Path(path_type=Path))
+    @click.option('--dry-run', is_flag=True)
+    @click.pass_obj
+    @json_option
+    def apply_primitive(bridge, request, dry_run):
+        """Write a controller primitive with an explicit readback condition."""
+        spec = decode_json(request.read_text(encoding='utf-8-sig'))
+        if not isinstance(spec, dict) or set(spec) != {'command', 'params', 'readback'}:
+            raise ValueError('Request requires command, params and readback')
+        check = spec['readback']
+        if (not isinstance(spec['command'], str) or not spec['command'] or not isinstance(spec['params'], dict)
+                or not isinstance(check, dict) or set(check) != {'command', 'params', 'expect'}
+                or check['command'] not in READ_COMMANDS or not isinstance(check['params'], dict)
+                or not isinstance(check['expect'], dict) or not check['expect']):
+            raise ValueError('Readback requires a known read command, object params and nonempty expect object')
+        if dry_run:
+            emit(Result(command='live apply', status='planned', data={'request': spec, 'bridge_contacted': False,
+                        'live_applied': False, 'file_effects': [], 'applied_count': None}))
+            return
+
+        def apply():
+            before = bridge.call(check['command'], check['params'])
+            response = bridge.call(spec['command'], spec['params'])
+            deadline = time.monotonic() + 1.5
+
+            def equal(expected, actual):
+                if isinstance(expected, bool):
+                    return expected is actual
+                if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
+                    return math.isclose(expected, actual, rel_tol=0, abs_tol=.0001)
+                return expected == actual
+
+            while True:
+                after = bridge.call(check['command'], check['params'])
+                confirmed = isinstance(after, dict) and all(k in after and equal(v, after[k]) for k, v in check['expect'].items())
+                if confirmed or time.monotonic() >= deadline:
+                    break
+                time.sleep(.04)
+            emit(Result(command='live apply', status='verified' if confirmed else 'unknown',
+                        reason_code=None if confirmed else 'live_value_not_confirmed',
+                        verified_scopes=['live_readback'] if confirmed else [],
+                        data={'backend': 'local_midi_bridge', 'request': spec, 'before': before, 'after': after,
+                              'response': response, 'submitted': True, 'live_applied': True if confirmed else None,
+                              'source_file_saved': False}))
+            if not confirmed:
+                raise click.exceptions.Exit(5)
+        execute('live apply', apply)

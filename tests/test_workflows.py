@@ -95,6 +95,11 @@ def test_cli_build_preview_and_source_preservation(tmp_path):
     preview = runner.invoke(app, ['plugin', 'verify', '--project', str(profile), '--track', '0',
         '--slot', '9', '--param', 'Emphasis', '--value', '.25', '--output-dir', str(verify_output), '--dry-run'])
     assert preview.exit_code == 0 and json.loads(preview.output)['status'] == 'planned' and not verify_output.exists()
+    live_request = tmp_path / 'stop.json'
+    live_request.write_text(json.dumps({'command': 'stop', 'params': {},
+        'readback': {'command': 'get_play_state', 'params': {}, 'expect': {'playing': False}}}))
+    preview = runner.invoke(app, ['live', '--bridge-port', '1', 'apply', '--request', str(live_request), '--dry-run'])
+    assert preview.exit_code == 0 and json.loads(preview.output)['data']['bridge_contacted'] is False
 
 
 def test_unknown_events_and_json_numbers_are_not_silently_corrupted(tmp_path):

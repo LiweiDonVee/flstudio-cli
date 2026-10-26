@@ -26,6 +26,9 @@ $fl = Join-Path $env:USERPROFILE '.local\bin\flstudio.exe'
 人机协作方式：GUI保存当前工程 → CLI写新副本 → GUI打开新副本继续编辑。
 任意Automation、自绘插件控件和未知变长clip仍需GUI；文件修改不会暗中改变当前编辑器内存。
 
-可选live：先单独部署兼容的[flstudio-mcp MIDI桥](https://github.com/rosasynthesiz/flstudio-mcp)，确认本地9787与FL控制器连通；CLI直接使用该桥的TCP协议。
+可选live：`uv tool install --editable ".[midi]" --python 3.12`安装MIDI依赖，再执行`flstudio bridge start`和`bridge status`。
+桥由CLI自身运行，不需要旧MCP server或daemon；复用已配置的FLStudioMCP RX/TX虚拟端口及FL控制器协议。新机仍须完成FL端的一次配置。
 `live status`、`live set-tempo`、`live set-mixer-pan`、`live plugin-params`、`live set-plugin-param`都可用。
+播放/停止、定位、音量、静音和其他宿主原语，用`live apply --request JSON`给出写入与独立回读条件；模板见[实时命令](docs/live-commands.md)。
+`live query`可查询播放、定位、通道、插件和路由。CLI自带桥只执行控制器已有原语，不支持任意Python执行。
 live写入不保存工程；修改前读原值，调试后恢复。它不是仅安装本CLI就具备的能力。

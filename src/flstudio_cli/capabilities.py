@@ -36,12 +36,16 @@ def list_capabilities() -> list[dict]:
         'plugin.arbitrary_ui': 'Native plugin UI controls without a file-state profile remain GUI operations',
         "automation": "R6: external native linear-clip subset",
     }
-    for operation in ('live.status', 'live.set_tempo', 'live.set_mixer_pan', 'live.plugin_params', 'live.set_plugin_param'):
+    for operation in ('live.status', 'live.set_tempo', 'live.set_mixer_pan', 'live.plugin_params', 'live.set_plugin_param', 'live.query', 'live.apply'):
         implemented.append(Capability(operation=operation, implemented=True, availability='available',
-                                      verification_level='live', backend='existing_midi_bridge',
-                                      limitations=['Requires the separately installed and configured local MIDI bridge',
+                                      verification_level='live', backend='local_midi_bridge',
+                                      limitations=['Requires the optional MIDI extra and configured FL controller/ports, or a compatible bridge',
                                                    'Does not save the open editor; unconfirmed readback returns unknown'],
-                                      last_evidence='docs/release-0.3.md'))
+                                      last_evidence='docs/release-0.4.1.md'))
+    implemented.append(Capability(operation='bridge.lifecycle', implemented=True, availability='available',
+                                  verification_level='live', backend='midi_sysex',
+                                  limitations=['Configured virtual MIDI ports and compatible installed FL controller required'],
+                                  last_evidence='docs/release-0.4.1.md'))
     implemented.append(Capability(operation='plugin.saved_param', implemented=True, availability='available',
                                   verification_level='persistence', backend='flp_file',
                                   limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque',

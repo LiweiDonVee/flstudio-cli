@@ -17,6 +17,8 @@ from .planning import PlanningError, build_plan
 
 def _emit(result: Result) -> None:
     payload = (encode_result(result) + "\n").encode("utf-8")
+    if sys.stdout is None:  # Windows pythonw login startup has no console.
+        return
     # Binary output does not depend on the Windows console/OEM code page.
     if hasattr(sys.stdout, "buffer"):
         sys.stdout.buffer.write(payload)
@@ -290,3 +292,5 @@ from .workflows import register as register_workflows
 register_workflows(app, _emit, json_option)
 from .live import register as register_live
 register_live(app, _emit, json_option)
+from .midi_bridge import register as register_bridge
+register_bridge(app, _emit, json_option)

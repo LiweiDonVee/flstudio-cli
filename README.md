@@ -54,7 +54,20 @@ The saved-state profile currently covers Emphasizer v2 **Emphasis** only.
 
 ## Optional live control
 
-An already configured MIDI controller bridge at `127.0.0.1:9787` enables:
+Install the MIDI extra to run the CLI's own local relay:
+
+```powershell
+uv tool install --editable ".[midi]" --python 3.12
+flstudio bridge start
+flstudio bridge status
+```
+
+The relay owns the MIDI ports and `127.0.0.1:9787`; no MCP server or daemon is
+needed. It uses the installed FL controller's compatible SysEx protocol.
+The virtual MIDI ports and FL controller still need their one-time configuration.
+On Windows, `bridge start` can launch the installed loopMIDI helper at login.
+
+With FL connected:
 
 ```powershell
 flstudio live status
@@ -64,12 +77,10 @@ flstudio live plugin-params --track 0 --slot 9
 flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value .25
 ```
 
-This adapter is compatible with the local bridge from
+The client also remains compatible with the local bridge from
 [flstudio-mcp](https://github.com/rosasynthesiz/flstudio-mcp).
-It uses that bridge's TCP protocol directly and does not launch an MCP frontend.
-The bridge, virtual MIDI ports and FL controller must be installed separately;
-installing this CLI alone does not enable live control. The saved-project
-backend works independently of that bridge.
+`bridge stop` stops only a relay identifying itself as CLI-owned.
+The saved-project backend works without MIDI dependencies or a relay.
 
 ## Result semantics and scope
 
@@ -94,11 +105,14 @@ uv sync --locked --python 3.12
 uv run pytest -q
 ```
 
-A fresh Astra XHigh comparison rated this version **CLI clearly better** for
+A fresh Astra XHigh comparison rated the 0.4.0 file workflows **CLI clearly better** for
 the three tested local tasks: session controls, saved parameter verification,
 and a saved beat with native audio output. This does not establish complete
 GUI coverage. [Independent report](docs/independent-comparison-0.4.md) ·
 [Structured evidence](docs/independent-comparison-0.4.json)
+
+0.4.1 adds the CLI-owned MIDI relay and the DSH migration path; its local
+connection checks are documented in [release-0.4.1.md](docs/release-0.4.1.md).
 
 The design drew on [CLI-Anything](https://github.com/HKUDS/CLI-Anything) and
 [OpenCLI](https://github.com/jackwener/OpenCLI). This is an independent project,
