@@ -43,8 +43,9 @@ def list_capabilities() -> list[dict]:
                                                    'Does not save the open editor; unconfirmed readback returns unknown'],
                                       last_evidence='docs/release-0.3.md'))
     implemented.append(Capability(operation='plugin.saved_param', implemented=True, availability='available',
-                                  verification_level='audio', backend='flp_file',
-                                  limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque'],
+                                  verification_level='persistence', backend='flp_file',
+                                  limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque',
+                                               'Saved-state readback; host parameter activation is not independently confirmed'],
                                   last_evidence='docs/release-0.3.md'))
     for operation, evidence in external.items():
         implemented.append(Capability(operation=operation, implemented=False, availability="not_implemented",
