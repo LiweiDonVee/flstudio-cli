@@ -13,6 +13,7 @@ import hashlib
 import math
 from pathlib import Path
 import subprocess
+import tempfile
 import time
 import uuid
 import wave
@@ -98,7 +99,7 @@ def read_audio(path: Path) -> tuple[dict, list[float]]:
             'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}, values
 
 
-def render(project: Path, output: Path, install: Path, timeout=120) -> dict:
+def render(project: Path, output: Path, install: Path, timeout=120, allow_silence=False) -> dict:
     project, output, install = project.resolve(), output.resolve(), install.resolve()
     if output.suffix.lower() != '.wav' or output.exists():
         raise ValueError('Choose a new .wav output path')
@@ -108,7 +109,18 @@ def render(project: Path, output: Path, install: Path, timeout=120) -> dict:
     if not executable.is_file():
         raise ValueError('FL64.exe was not found in the installation')
     before = hashlib.sha256(project.read_bytes()).hexdigest()
-    process = run_fl(executable, ['/R' + str(output), '/Ewav', str(project)], output.parent, timeout)
+    from .flp import Project
+    doc = Project.read(project)
+    doc._replace_value(9, b'\x01')
+    # Export a temporary Song-mode copy in the same folder so relative sample
+    # paths retain their base, without modifying the user's saved mode/selection.
+    with tempfile.NamedTemporaryFile(prefix='.flstudio-render-', suffix='.flp', dir=project.parent, delete=False) as temporary:
+        temporary.write(doc.encode())
+        render_input = Path(temporary.name)
+    try:
+        process = run_fl(executable, ['/R' + str(output), '/Ewav', str(render_input)], output.parent, timeout)
+    finally:
+        render_input.unlink()
     if process['status'] != 'exited' or process['exit_code'] != 0 or not output.is_file():
         return {'status': 'failed', 'reason': 'fl_export_failed', 'process': process,
                 'output': str(output), 'input_sha256': before}
@@ -116,6 +128,22 @@ def render(project: Path, output: Path, install: Path, timeout=120) -> dict:
     if before != after:
         return {'status': 'unknown', 'reason': 'source_changed_during_render', 'process': process}
     metadata, _ = read_audio(output)
-    return {'status': 'verified', 'backend': 'fl_native_batch', 'process': process,
+    patterns = doc.patterns()
+    ticks_per_bar = doc.ppq * 4
+    end_tick = 0
+    expected_notes = 0
+    for clip in doc.playlist():
+        pattern = patterns.get(clip['pattern_number'])
+        if pattern and pattern['notes']:
+            expected_notes += len(pattern['notes'])
+            source_end = max(n['start_tick'] + n['length_tick'] for n in pattern['notes'])
+            source_span = math.ceil(source_end / ticks_per_bar) * ticks_per_bar
+            end_tick = max(end_tick, clip['start_tick'] + min(clip['length_tick'], source_span))
+    expected_seconds = end_tick * 60 / (doc.tempo * doc.ppq)
+    if (expected_notes and metadata['peak'] == 0 and not allow_silence) or metadata['duration_seconds'] + .05 < expected_seconds:
+        return {'status': 'failed', 'reason': 'render_content_mismatch', 'process': process,
+                'output': str(output), 'audio': metadata, 'expected_minimum_seconds': expected_seconds,
+                'message': 'Silent or truncated FL output; exporter exit 0 is not composition success'}
+    return {'status': 'verified', 'backend': 'fl_native_batch', 'render_mode': 'song', 'process': process,
             'input': str(project), 'input_sha256': before, 'output': str(output),
-            'audio': metadata, 'input_unchanged': True}
+            'audio': metadata, 'expected_minimum_seconds': expected_seconds, 'input_unchanged': True}

@@ -35,6 +35,7 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     saved = output.read_bytes()
     doc = Project.read(output)
     assert doc.tempo == 137 and [c['name'] for c in doc.channels()] == ['鼓', 'Bass']
+    assert next(e.data for e in doc.events if e.id == 9) == b'\1', 'New arrangements must open in Song mode'
     assert [n['channel_index'] for n in doc.patterns()[7]['notes']] == [0, 0, 1]
     assert doc.playlist()[0]['track'] == 3
     other = [n for n in doc.patterns()[7]['notes'] if n['channel_index'] == 1]

@@ -169,15 +169,16 @@ def register(app, emit, json_option):
     @click.option('--fl-install', default=DEFAULT_INSTALL, type=click.Path(path_type=Path))
     @click.option('--timeout', default=120.0, type=click.FloatRange(min=1, max=1800))
     @click.option('--dry-run', is_flag=True)
+    @click.option('--allow-silence', is_flag=True, help='Accept intentionally silent output, retaining duration checks.')
     @json_option
-    def render_wav(source, output, fl_install, timeout, dry_run):
+    def render_wav(source, output, fl_install, timeout, dry_run, allow_silence):
         doc = Project.read(source)
         if dry_run:
             emit(Result(command='render wav', status='planned', data={'source': str(source.resolve()),
                         'output': str(output.resolve()), 'backend': 'fl_native_batch', 'file_effects': [], 'applied_count': None}))
             return
         from .native import render
-        data = render(source, output, fl_install, timeout)
+        data = render(source, output, fl_install, timeout, allow_silence)
         emit(Result(command='render wav', status=data['status'], reason_code=data.get('reason'),
                     verified_scopes=['fl_engine_export', 'pcm_audio'] if data['status'] == 'verified' else [], data=data))
         if data['status'] != 'verified':

@@ -511,5 +511,9 @@ def create_project(spec: dict, template: Path) -> Project:
         for score in pattern['scores']:
             project.replace_notes(number, score['channel_index'], score['notes'])
         project.name_pattern(number, pattern.get('name', f'Pattern {number}'))
+    # New compositions open on an actual pattern and render their Playlist,
+    # rather than inheriting the factory template's empty Pattern-mode export.
+    project._replace_value(67, struct.pack('<H', spec['patterns'][0]['number']))
+    project._replace_value(9, b'\x01')
     project.set_playlist(spec['playlist'])
     return project
