@@ -1,6 +1,15 @@
 # 功能覆盖与验收矩阵
 
-截至 2026-10-26，本项目只有规划，**新 CLI 没有任何已验收功能**。下表的“已有证据”属于旧部署、本机软件文档或外部项目；不能移作新 CLI 的 supported 标签。来源见 [research.md](research.md)。
+截至 2026-10-26，**新 CLI 0.1.0 已实现 M0 的只读诊断、容器探测和纯规划**，离线与本机只读验收见 [m0-verification.md](m0-verification.md)。真实 FL 创作、语义读取、保存重开和渲染均未实现。下方长期功能矩阵的“已有证据”属于旧部署、本机软件文档或外部项目，不能移作新 CLI 的 supported 标签。来源见 [research.md](research.md)。
+
+| 新 CLI 当前操作 | implemented / availability | 本项目验证范围 | 限制 |
+| --- | --- | --- | --- |
+| doctor | true / available | offline_fixture；本机 environment_files | 只读文件 metadata、SHA-256 和依赖发现，不查询 live FL |
+| flp.container | true / available | offline_fixture；本机 flp_container | 仅 FLhd/FLdt，notes/patterns/playlist unavailable |
+| plan（包括 notes replace dry-run） | true / available | offline_fixture | selector 未绑定，executable=false，applied/verified count=null |
+| notes read/replace、pattern、playlist、mixer、plugin、automation、save、render | false / not_implemented | source_only；只有外部候选证据 | M1–M5 待实施；任何 apply 退出 7 |
+
+CLI `capabilities` 的 `verification_level=offline_fixture` 表示该实现的离线测试等级。此次本机文件读取另外记录在验收报告中，不升级为 live/persistence/audio 证书。没有 GUI/native 后端占位类或隐式旧系统依赖。
 
 后端缩写：M = 官方 MIDI Scripting API；N = Realynx FruityLink 原生桥候选；F = FLP 文件处理；G = Windows GUI。F 第一阶段为读取保存快照，写入另行验证。N 当前本机 5639 均未验证，现有 live 记录主要来自 5570。
 

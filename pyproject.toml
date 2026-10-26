@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flstudio-cli"
+version = "0.1.0"
+description = "Independent FL Studio CLI: read-only diagnostics and honest planning"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["click>=8.1,<9", "pydantic>=2.10,<3"]
+
+[project.scripts]
+flstudio = "flstudio_cli.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--strict-markers"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flstudio_cli"]

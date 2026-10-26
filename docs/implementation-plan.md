@@ -1,6 +1,6 @@
 # FL Studio CLI Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This document does not authorize installing a native bridge or editing a user song; follow the active task's authorization and scope.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking. This document does not authorize installing a native bridge or editing a user song; follow the active task's authorization and scope.
 
 **Goal:** 先交付完全独立、可运行、如实描述能力的 FL CLI；然后交付五通道创作、保存重开与真实渲染闭环，逐步扩大到 GUI 功能目录。
 
@@ -24,6 +24,8 @@
 ---
 
 ## M0：第一批可立即实施的工作
+
+实施状态：0.1–0.5 已作为一个紧密耦合的 M0 交付完成；单次集成提交，验收见 [m0-verification.md](m0-verification.md)。M1 以后保持待实施。
 
 M0 是用户可运行的CLI，不是全创作工具。完成标准：`doctor`、`flp probe`、`capabilities`、`plan build`、`notes replace --dry-run`可运行；真实apply明确拒绝；每条输出准确区分“容器检查/生成计划”与“FL实际改变”。
 
@@ -72,11 +74,11 @@ def main() -> None: ...                       # console script入口
 
 以上为接口规格，不要求逐字复制可变默认值写法；实现使用Pydantic field default factory。具体业务count放入对应data模型，不用通用 `ok` 推断mutation。
 
-- [ ] 建立独立Python3.12环境，console script为 `flstudio = flstudio_cli.cli:main`；`python -m flstudio_cli`调用同一入口。
-- [ ] 先写契约测试：中文参数名正确UTF-8往返；`-0.0`序列化为0；NaN、±Infinity返回含字段路径的明确错误；unknown不能出现虚构applied_count。
-- [ ] 实现契约/JSON输出；日志走stderr，stdout JSON可被标准`json.loads`完整读取。
-- [ ] 验证 `uv run flstudio --help`、`uv run python -m flstudio_cli --help`、`uv run pytest tests/test_contracts.py tests/test_cli.py -q`。
-- [ ] 在新仓库已初始化且无无关改动时提交这批文件；未初始化仓库由主代理决定初始化，不改父目录或旧仓库。
+- [x] 建立独立Python3.12环境，console script为 `flstudio = flstudio_cli.cli:main`；`python -m flstudio_cli`调用同一入口。
+- [x] 先写契约测试：中文参数名正确UTF-8往返；`-0.0`序列化为0；NaN、±Infinity返回含字段路径的明确错误；unknown不能出现虚构applied_count。
+- [x] 实现契约/JSON输出；日志走stderr，stdout JSON可被标准`json.loads`完整读取。
+- [x] 验证 `uv run flstudio --help`、`uv run python -m flstudio_cli --help`、`uv run pytest tests/test_contracts.py tests/test_cli.py -q`。
+- [x] 在新仓库已初始化且无无关改动时提交这批文件；未初始化仓库由主代理决定初始化，不改父目录或旧仓库。
 
 ### Task 0.2：只读环境 doctor
 
@@ -84,10 +86,10 @@ def main() -> None: ...                       # console script入口
 
 **Interfaces:** `inspect_environment(fl_install: Path | None) -> Result`。data包含当前CLI解释器/版本、平台/位数、可执行入口、指定或检测到的FL64/FLEngine路径和FileVersion、engine SHA-256、工具可发现性与后端状态。版本/路径未知用null加原因。进程运行状态不是该M0命令必需条件。
 
-- [ ] 用临时目录测试：未安装FL、仅有FL64无engine、无有效PE version、两个安装路径必须显式选择；都不启动任何文件。
-- [ ] 实现Windows文件版本资源读取；文件hash读取即可，不运行FL.exe来查版本。可运行Python的路径与PATH上的python分开显示。
-- [ ] doctor将GUI/native/MIDI标为not_configured或not_implemented；输出“存在dotnet命令”不能写“.NET9 SDK已就绪”。
-- [ ] 验证命令与本机文件版本一致，并确保退出/输出能够区分诊断完成与某能力未可用。
+- [x] 用临时目录测试：未安装FL、仅有FL64无engine、无有效PE version、两个安装路径必须显式选择；都不启动任何文件。
+- [x] 实现Windows文件版本资源读取；文件hash读取即可，不运行FL.exe来查版本。可运行Python的路径与PATH上的python分开显示。
+- [x] doctor将GUI/native/MIDI标为not_configured或not_implemented；输出“存在dotnet命令”不能写“.NET9 SDK已就绪”。
+- [x] 验证命令与本机文件版本一致，并确保退出/输出能够区分诊断完成与某能力未可用。
 
 ```powershell
 uv run flstudio doctor --fl-install 'C:\Program Files\Image-Line\FL Studio 2026' --json
@@ -101,12 +103,12 @@ uv run flstudio doctor --fl-install 'C:\Program Files\Image-Line\FL Studio 2026'
 
 **Interfaces:** `probe_flp(path: Path) -> Result`。data含absolute path、size、sha256、header format/channel_count/ppq、data chunk声明长度与实际长度、可确认的producer version、parse_scope=`container`、semantic_sections状态。`channel_count`来自header，不声称已枚举真实live channels。
 
-- [ ] 测试先覆盖有效容器、FLhd长度错误、截断FLdt、畸形version长度、未知首event、文件读取中变化。
-- [ ] FLhd读取使用明确的小端结构 `struct.Struct("<4sIhHH")`：magic、header length、format、channel count、PPQ；核对FLdt与声明长度，不反序列化未知工程事件。
-- [ ] 若FLdt第一个event恰是199且长度编码/ASCII版本满足边界，提取producer version；否则版本为unknown。禁止在任意二进制字符串里搜索版本并假装结构化解析。
-- [ ] 不继续走未认证的event172/Playlist解析。notes/patterns/playlist始终 `unavailable`，不返回伪造0。容器成功仅 `verified_scopes=["flp_container"]`。
-- [ ] stat前后确认输入没变；若变化返回 `source_changed`，不声称hash和结构属于同一快照。
-- [ ] 验证合成fixture及只读本地probe-base文件；源文件sha256前后相同。
+- [x] 测试先覆盖有效容器、FLhd长度错误、截断FLdt、畸形version长度、未知首event、文件读取中变化。
+- [x] FLhd读取使用明确的小端结构 `struct.Struct("<4sIhHH")`：magic、header length、format、channel count、PPQ；核对FLdt与声明长度，不反序列化未知工程事件。
+- [x] 若FLdt第一个event恰是199且长度编码/ASCII版本满足边界，提取producer version；否则版本为unknown。禁止在任意二进制字符串里搜索版本并假装结构化解析。
+- [x] 不继续走未认证的event172/Playlist解析。notes/patterns/playlist始终 `unavailable`，不返回伪造0。容器成功仅 `verified_scopes=["flp_container"]`。
+- [x] stat前后确认输入没变；若变化返回 `source_changed`，不声称hash和结构属于同一快照。
+- [x] 验证合成fixture及只读本地probe-base文件；源文件sha256前后相同。
 
 用于测试的真实可执行fixture构造规格：
 
@@ -157,12 +159,12 @@ def list_capabilities() -> list[dict[str, Any]]: ...
 def build_plan(request: NotesReplaceRequest, source_probe: Result) -> Plan: ...
 ```
 
-- [ ] `notes-one.json`采用 `[{"key":36,"start_tick":0,"length_tick":24,"velocity":100}]`。验证非法key、负tick、0长度、无穷值、pattern0、负channel在规划前拒绝。
-- [ ] capability至少列出notes read/write、pattern、Playlist、mixer、plugin、automation、save、render；明确current implementation与external evidence不同，M0只有doctor/flp.container/plan是已实现。
-- [ ] `build_plan`是纯函数，输出 `executable=false` 及 `score.semantic_read`、`target.resolve`、`notes.replace`、`project.persistence_verify` 等未满足项；只凭header不假装绑定channel/pattern。
-- [ ] `plan build --request request.json`和 `notes replace ... --dry-run`共用同一入口。`notes replace`不带dry-run、`plan apply`始终返回 `rejected/backend_unimplemented` 和退出码7，不连接任何进程。
-- [ ] `--dry-run`输出requested_count，applied_count/verified_count为null，verified_scopes无live。`--plan-out`未提供时不创建任何文件或状态目录；提供时只创建该计划文件并报告这项文件副作用。
-- [ ] 测试同输入输出稳定、input文件不变、无broker/控制器import、无进程或网络调用。规范化JSON/hash计算共享编码逻辑，不依赖Python dict偶然顺序。
+- [x] `notes-one.json`采用 `[{"key":36,"start_tick":0,"length_tick":24,"velocity":100}]`。验证非法key、负tick、0长度、无穷值、pattern0、负channel在规划前拒绝。
+- [x] capability至少列出notes read/write、pattern、Playlist、mixer、plugin、automation、save、render；明确current implementation与external evidence不同，M0只有doctor/flp.container/plan是已实现。
+- [x] `build_plan`是纯函数，输出 `executable=false` 及 `score.semantic_read`、`target.resolve`、`notes.replace`、`project.persistence_verify` 等未满足项；只凭header不假装绑定channel/pattern。
+- [x] `plan build --request request.json`和 `notes replace ... --dry-run`共用同一入口。`notes replace`不带dry-run、`plan apply`始终返回 `rejected/backend_unimplemented` 和退出码7，不连接任何进程。
+- [x] `--dry-run`输出requested_count，applied_count/verified_count为null，verified_scopes无live。`--plan-out`未提供时不创建任何文件或状态目录；提供时只创建该计划文件并报告这项文件副作用。
+- [x] 测试同输入输出稳定、input文件不变、无broker/控制器import、无进程或网络调用。规范化JSON/hash计算共享编码逻辑，不依赖Python dict偶然顺序。
 
 ```powershell
 uv run flstudio capabilities --json
@@ -176,11 +178,11 @@ uv run flstudio plan apply --file '.\plan.json' --json
 
 **Files:** `tests/test_cli.py`、`README.md`、`docs/commands.md`，必要时新增只读验收报告 `docs/m0-verification.md`。
 
-- [ ] 使用真实CLI子进程执行help、doctor、flp probe、capabilities、notes dry-run和拒绝apply；stdout都是有效JSON，非零状态与原因一致。
-- [ ] 在临时独立HOME/APPDATA/state目录运行dry-run，前后文件树hash一致；同时拦截所有执行gateway的调用并断言为0，防止只测“没有save”。
-- [ ] 普通pytest只运行离线测试，不启动FL；不增加任何自动运行live测试的默认hook。
-- [ ] `uv run pytest -q`及上述CLI验收通过后更新README：清楚列出“可诊断/探测/规划；尚不写FL”。记录新CLI自己的version、解释器和依赖锁。
-- [ ] 交付一条可复制运行命令和一个示例计划；不要以M0通过宣称五通道闭环完成。
+- [x] 使用真实CLI子进程执行help、doctor、flp probe、capabilities、notes dry-run和拒绝apply；stdout都是有效JSON，非零状态与原因一致。
+- [x] 在临时独立HOME/APPDATA/state目录运行dry-run，前后文件树hash一致；同时拦截所有执行gateway的调用并断言为0，防止只测“没有save”。
+- [x] 普通pytest只运行离线测试，不启动FL；不增加任何自动运行live测试的默认hook。
+- [x] `uv run pytest -q`及上述CLI验收通过后更新README：清楚列出“可诊断/探测/规划；尚不写FL”。记录新CLI自己的version、解释器和依赖锁。
+- [x] 交付一条可复制运行命令和一个示例计划；不要以M0通过宣称五通道闭环完成。
 
 ## M1：五通道真实往返垂直切片
 
