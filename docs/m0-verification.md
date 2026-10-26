@@ -47,6 +47,11 @@ doctor 返回 `verified`，scope 只有 `environment_files`：
 
 ## 边界与实施决定
 
+最终独立审查确认唯一错误输出缺陷已修复：重复 key 含孤立 Unicode surrogate 时，
+诊断只转义 key 的显示文本，CLI 返回 `invalid_json`、退出 2、stderr 为空，不改变有效输入数据。
+该修复提交为 `920712a593711d6edb9ab490d44632558ae3982b`。修复后主代理复跑完整 80 项测试，
+并在上述只读 audit 环境增加该非法输入，最终八条安装后 CLI 验收均通过；输入与用户目录树仍不变。
+
 Result 与 Plan 都用版本化、extra=forbid 的 Pydantic 契约。规范化编码用于输出和请求 hash；输入校验保留原数值类型，防止负浮点零先被规范化成可接受的整数。Plan 的 source_sha256 绑定本次稳定容器观察，request_sha256 绑定排序后的规范化请求。
 
 FLP probe 只流式验证容器和有限版本前缀，不遍历其余事件。Windows Python 3.12 的 path.stat/fstat 对旧 ctime 字段可能语义不同，因此跨 API 比较身份、大小、mtime，同类 API 分别比较前后 ctime。检测到变化会撤销观察；这不是并发编辑下的原子快照保证。
