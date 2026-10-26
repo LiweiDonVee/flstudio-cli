@@ -54,6 +54,7 @@ flstudio project edit --input song.flp --request changes.json --output mixed.flp
 
 `scores.mode` 为 replace 或 append。未指定的通道音符和未知工程事件原样保留。
 通道音量原始量纲0..12800，混音推子0..16000，pan -6400..6400；不猜测各插件的 dB 曲线。
+CLI 的 `pan_raw` 对通道和 Mixer 都以0居中；通道文件内部以6400居中，由 CLI 在读写时转换。
 `channels` 也可修改 name、sample_path，或加载 plugin_preset。`playlist` 若提供则替换完整排列。
 
 ## FL 真正打开并渲染
@@ -64,8 +65,10 @@ flstudio audio inspect --input mix.wav
 ```
 
 调用已安装的 FL64.exe，在独立 Windows 桌面运行官方批渲染；当前用户编辑器可以保持打开。
-输出必须是新文件。进程超时只终止该命令自己创建的 worker，不动用户 FL。成功还要核对新 WAV
-的实际格式、完整帧数、峰值/RMS及源文件 hash 未变；音乐内容是否符合请求由工作流或盲测另外检查。
+输出必须是新文件。渲染使用同目录的临时Song模式副本，结束即删除，原工程保存的模式/选择不变。
+进程超时只终止该命令自己创建的worker，不动用户FL。成功还核对新WAV的格式、帧数、峰值/RMS、
+预期编排时长和源hash；非空曲目输出全零或截短会失败。需要有意导出静音时显式加`--allow-silence`。
+各声部与请求是否吻合由工作流或独立盲测另外检查。
 
 ## 可执行文件计划
 

@@ -1,0 +1,502 @@
+{
+  "tempo_bpm": 130,
+  "channels": [
+    {
+      "name": "Kick",
+      "sample_path": "examples/audio/kick.wav",
+      "mixer_track": 1,
+      "volume_raw": 10000
+    },
+    {
+      "name": "Clap",
+      "sample_path": "examples/audio/clap.wav",
+      "mixer_track": 2,
+      "volume_raw": 8500
+    },
+    {
+      "name": "HiHat",
+      "sample_path": "examples/audio/hat.wav",
+      "mixer_track": 3,
+      "volume_raw": 7000
+    },
+    {
+      "name": "Snare",
+      "sample_path": "examples/audio/snare.wav",
+      "mixer_track": 4,
+      "volume_raw": 6500
+    },
+    {
+      "name": "Sub Bass",
+      "plugin_preset": "C:\\Program Files\\Image-Line\\FL Studio 2026\\Data\\Patches\\Plugin presets\\Generators\\3x Osc\\Default.fst",
+      "mixer_track": 5,
+      "volume_raw": 4500
+    }
+  ],
+  "patterns": [
+    {
+      "number": 1,
+      "name": "Four-bar beat",
+      "scores": [
+        {
+          "channel_index": 0,
+          "notes": [
+            {
+              "key": 60,
+              "start_tick": 0,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 192,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 336,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 384,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 576,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 672,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 768,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 960,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 1104,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 1152,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 1344,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 1440,
+              "length_tick": 24,
+              "velocity": 102
+            }
+          ]
+        },
+        {
+          "channel_index": 1,
+          "notes": [
+            {
+              "key": 60,
+              "start_tick": 96,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 288,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 480,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 672,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 864,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 1056,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 1248,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 1440,
+              "length_tick": 24,
+              "velocity": 95
+            }
+          ]
+        },
+        {
+          "channel_index": 2,
+          "notes": [
+            {
+              "key": 60,
+              "start_tick": 0,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 48,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 96,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 144,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 192,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 240,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 288,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 312,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 336,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 384,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 432,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 480,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 528,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 576,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 624,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 672,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 696,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 720,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 768,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 816,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 864,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 912,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 960,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1008,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1056,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1080,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1104,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1152,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1200,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1248,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1296,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1344,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1392,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1392,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1440,
+              "length_tick": 24,
+              "velocity": 85
+            },
+            {
+              "key": 60,
+              "start_tick": 1488,
+              "length_tick": 24,
+              "velocity": 65
+            },
+            {
+              "key": 60,
+              "start_tick": 1488,
+              "length_tick": 24,
+              "velocity": 85
+            }
+          ]
+        },
+        {
+          "channel_index": 3,
+          "notes": [
+            {
+              "key": 60,
+              "start_tick": 264,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 648,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 1032,
+              "length_tick": 24,
+              "velocity": 102
+            },
+            {
+              "key": 60,
+              "start_tick": 1392,
+              "length_tick": 24,
+              "velocity": 88
+            },
+            {
+              "key": 60,
+              "start_tick": 1440,
+              "length_tick": 24,
+              "velocity": 95
+            },
+            {
+              "key": 60,
+              "start_tick": 1488,
+              "length_tick": 24,
+              "velocity": 102
+            }
+          ]
+        },
+        {
+          "channel_index": 4,
+          "notes": [
+            {
+              "key": 36,
+              "start_tick": 0,
+              "length_tick": 96,
+              "velocity": 88
+            },
+            {
+              "key": 36,
+              "start_tick": 240,
+              "length_tick": 96,
+              "velocity": 95
+            },
+            {
+              "key": 39,
+              "start_tick": 384,
+              "length_tick": 96,
+              "velocity": 102
+            },
+            {
+              "key": 34,
+              "start_tick": 624,
+              "length_tick": 96,
+              "velocity": 88
+            },
+            {
+              "key": 36,
+              "start_tick": 768,
+              "length_tick": 96,
+              "velocity": 95
+            },
+            {
+              "key": 43,
+              "start_tick": 1008,
+              "length_tick": 96,
+              "velocity": 102
+            },
+            {
+              "key": 39,
+              "start_tick": 1152,
+              "length_tick": 96,
+              "velocity": 88
+            },
+            {
+              "key": 34,
+              "start_tick": 1392,
+              "length_tick": 96,
+              "velocity": 95
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "playlist": [
+    {
+      "pattern_number": 1,
+      "track": 1,
+      "start_tick": 0,
+      "length_tick": 1536
+    }
+  ]
+}

@@ -6,13 +6,16 @@
 不再依赖当前卷帘、抢焦点、快捷键脚本或旧 MCP 进程。
 
 ```powershell
-uv sync --locked
-uv run flstudio project build --request song.json --output song.flp
-uv run flstudio project inspect --input song.flp --summary
-uv run flstudio render wav --project song.flp --output mix.wav
+uv tool install --editable . --python 3.12
+flstudio project build --request song.json --output song.flp
+flstudio project inspect --input song.flp --summary
+flstudio render wav --project song.flp --output mix.wav
 ```
 
 [编曲请求格式与完整用法](docs/quickstart-0.2.md)
+
+本机已安装到 `C:\Users\Owner\.local\bin\flstudio.exe`，并加入用户PATH。
+无需重开旧Harness即可用该绝对路径调用。[给 Agent 的简短入口](AGENT-USAGE.md)。
 
 可用功能：
 
@@ -26,11 +29,11 @@ uv run flstudio render wav --project song.flp --output mix.wav
 - `--dry-run` 不写工程、音频、脚本或状态文件。
 
 ```powershell
-uv run flstudio notes list --project song.flp --pattern-number 1 --channel-index 0
-uv run flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 --notes notes.json --output revision.flp
-uv run flstudio project edit --input song.flp --request changes.json --output mixed.flp
-uv run flstudio audio inspect --input mix.wav
-uv run flstudio capabilities
+flstudio notes list --project song.flp --pattern-number 1 --channel-index 0
+flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 --notes notes.json --output revision.flp
+flstudio project edit --input song.flp --request changes.json --output mixed.flp
+flstudio audio inspect --input mix.wav
+flstudio capabilities
 ```
 
 写入命令操作保存的工程副本，**不会把改动偷偷写进当前打开的 GUI**。
