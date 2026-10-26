@@ -154,7 +154,7 @@ class Project:
                 'sample_path': text(values[196]) if 196 in values else None,
                 'mixer_track': int.from_bytes(values.get(22, b'\0'), 'little'),
                 'volume_raw': struct.unpack_from('<I', levels, 4)[0] if levels and len(levels) >= 8 else None,
-                'pan_raw': struct.unpack_from('<i', levels)[0] if levels and len(levels) >= 4 else None,
+                'pan_raw': struct.unpack_from('<i', levels)[0] - 6400 if levels and len(levels) >= 4 else None,
                 'plugin_state_sha256': hashlib.sha256(values[213]).hexdigest() if 213 in values else None,
             })
         if len(result) != self.channel_count:
@@ -329,7 +329,10 @@ class Project:
                 if type(value) is not int or not low <= value <= high:
                     raise ValueError(f'{key} must be {low}..{high}')
                 raw = bytearray(mapping[219].data)
-                struct.pack_into('<I' if key == 'volume_raw' else '<i', raw, 4 if key == 'volume_raw' else 0, value)
+                # Keep the CLI's centered pan units consistent with Mixer.
+                # Channel Levels stores 0..12800, with 6400 at the center.
+                stored = value + 6400 if key == 'pan_raw' else value
+                struct.pack_into('<I' if key == 'volume_raw' else '<i', raw, 4 if key == 'volume_raw' else 0, stored)
                 mapping[219].data = bytes(raw)
             elif key == 'plugin_preset':
                 preset = preset_events(value)
