@@ -1,73 +1,105 @@
 # FL Studio CLI
 
-**0.4.0** 本地 CLI，可创建和编辑真实 FL 工程，并调用 FL 原生渲染。
+Compose and edit saved FL Studio projects, render with the real FL engine,
+and optionally control an open session through a configured local MIDI bridge.
 
-实际工作流：**JSON 编曲 → 新 FLP 副本 → 逐 Pattern/通道回读 → FL 原生 WAV 渲染**。
-文件编曲不依赖当前卷帘、抢焦点、快捷键脚本或 MCP。可选的 `live` 命令复用已有本地 MIDI 桥，直接操作打开的 FL。
+Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
+The project does not bundle FL Studio, its factory templates or plugins.
+
+## Install and make a beat
+
+Install [uv](https://docs.astral.sh/uv/), then:
 
 ```powershell
+git clone https://github.com/LiweiDonVee/flstudio-cli.git
+cd flstudio-cli
 uv tool install --editable . --python 3.12
-flstudio project build --request song.json --output song.flp
-flstudio project inspect --input song.flp --summary
-flstudio render wav --project song.flp --output mix.wav
+flstudio doctor
+flstudio project build --request examples/beat.json --output my-beat.flp
+flstudio project inspect --input my-beat.flp --summary
+flstudio render wav --project my-beat.flp --output my-beat.wav
 ```
 
-[编曲请求格式与完整用法](docs/quickstart-0.2.md)
+If a running terminal has not refreshed PATH, use
+`& "$env:USERPROFILE\.local\bin\flstudio.exe"`.
+The sample drums in `examples/audio` are generated for this project.
 
-本机已安装到 `C:\Users\Owner\.local\bin\flstudio.exe`，并加入用户PATH。
-无需重开旧Harness即可用该绝对路径调用。[给 Agent 的简短入口](AGENT-USAGE.md)。
-
-可用功能：
-
-- 新建多个采样/音源通道，加载本机 generator 的 `.fst` 预设。
-- 明确指定 Pattern 和通道读写音符；替换一个通道时保留其他通道的原始音符记录。
-- Pattern 命名，安排和重复 Playlist pattern clips。
-- 修改样本路径、名称、音量、声像、通道到 Mixer 的路由。
-- Mixer 音量、声像、名称、静音、编组路由；从 `.fst` 加载效果器。
-- 保存到新副本；计划绑定源哈希，拒绝源变化和覆盖已有文件。
-- 在独立 Windows 桌面调用真实 FL 批渲染，检查新 WAV、实际帧数及音量。
-- `--dry-run` 不写工程、音频、脚本或状态文件。
+## Saved projects
 
 ```powershell
 flstudio notes list --project song.flp --pattern-number 1 --channel-index 0
-flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 --notes notes.json --output revision.flp
+flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 --notes notes.json --output revised.flp
 flstudio project edit --input song.flp --request changes.json --output mixed.flp
-flstudio audio inspect --input mix.wav
-flstudio capabilities
 ```
 
-已有 MIDI 桥已连通时，还可直接修改当前会话：
+The file backend supports explicit pattern/channel notes, fixed-layout Playlist
+pattern clips, sample paths, installed generator/effect `.fst` presets,
+channel levels and routing, and Mixer levels, names, mute and bus routing.
+Every edit creates a new file; existing outputs and source files are never overwritten.
+
+[Request format and units](docs/quickstart-0.2.md) · [Agent quickstart](AGENT-USAGE.md)
+
+## Parameter state and actual audio response
+
+```powershell
+flstudio plugin params --project song.flp --track 0 --slot 9
+flstudio plugin verify --project song.flp --track 0 --slot 9 --param Emphasis --value .25 --output-dir checked
+```
+
+`checked/project.flp` changes only the requested parameter. Separate diagnostic
+copies run the copied effect before/after the change with the same controlled
+input and are rendered by FL itself. The result identifies this isolated
+verification context; it does not imply the open editor changed.
+The saved-state profile currently covers Emphasizer v2 **Emphasis** only.
+
+## Optional live control
+
+An already configured MIDI controller bridge at `127.0.0.1:9787` enables:
 
 ```powershell
 flstudio live status
 flstudio live set-tempo --bpm 130
-flstudio live set-mixer-pan --track 1 --value 0.25
+flstudio live set-mixer-pan --track 1 --value .25
 flstudio live plugin-params --track 0 --slot 9
-flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value 0.25
+flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value .25
 ```
 
-`live` 通过已有 `127.0.0.1:9787` MIDI 桥操作宿主 API，需该桥和 FL 控制器已配置。
-不启动 MCP 前端或修改端口配置；`--dry-run` 不连接桥。实际值未收敛时返回 `unknown`，没有保存工程。
-保存文件的单参数修改见 [0.3 用法与验证](docs/release-0.3.md)。
+This adapter is compatible with the local bridge from
+[flstudio-mcp](https://github.com/rosasynthesiz/flstudio-mcp).
+It uses that bridge's TCP protocol directly and does not launch an MCP frontend.
+The bridge, virtual MIDI ports and FL controller must be installed separately;
+installing this CLI alone does not enable live control. The saved-project
+backend works independently of that bridge.
 
-参数回读矛盾时，可直接保存精确修改并用真实 FL 取得音频响应证据：
+## Result semantics and scope
+
+Commands return UTF-8 JSON. `artifact_ready` means a saved file was written and
+read back; `verified_scopes` names the evidence actually obtained.
+Native WAV rendering checks new PCM output, arrangement duration, non-silence
+and source preservation. Live writes require readback; unresolved values return
+`unknown` rather than success. `--dry-run` makes no project/audio changes and
+does not contact the live bridge.
+
+File edits do not change the editor's unsaved memory. The collaboration path
+is **GUI save → CLI new copy → GUI open the copy**.
+Arbitrary automation curves, unknown variable-layout Playlist clips and custom
+third-party plugin controls are outside the current implementation.
+
+Three workflow regressions are maintained; native application and independent
+comparison evidence is documented separately. Development checks require a
+local FL installation:
 
 ```powershell
-flstudio plugin verify --project song.flp --track 0 --slot 9 --param Emphasis --value .25 --output-dir checked
+uv sync --locked --python 3.12
+uv run pytest -q
 ```
 
-生成只改目标参数的 `checked/project.flp`；独立诊断副本使用受控输入，避免安静鼓点使效果差异无法观测。
-当前验证配置覆盖 Emphasizer 的 Emphasis；它确认保存状态和原生音频响应，不表示当前打开的工程已修改。
+A fresh Astra XHigh comparison rated this version **CLI clearly better** for
+the three tested local tasks: session controls, saved parameter verification,
+and a saved beat with native audio output. This does not establish complete
+GUI coverage. [Independent report](docs/independent-comparison-0.4.md) ·
+[Structured evidence](docs/independent-comparison-0.4.json)
 
-写入命令操作保存的工程副本，**不会把改动偷偷写进当前打开的 GUI**。
-结果中的 `artifact_ready` 证明文件已写入并回读；`fl_engine_export` 证明 FL 真正打开并导出了它。
-输出文件必须是新路径；原始工程保持不变。
-
-本机已验证 FL Studio Producer **26.1.6.5639**。新工程基于本机自带 Basic 模板；
-不附带或重新分发 Image-Line 的模板/插件。
-复杂编辑过的可变长度 Playlist clip、任意 Automation 曲线、任意第三方插件自绘控件和内存工程附着尚未支持，
-遇到未识别的数据布局会拒绝处理。
-
-只保留 [三个工作流回归](tests/test_workflows.py)；实际 FL 导出和独立盲测另记在 [发布验证](docs/release-0.2.md)。
-0.3的历史独立对比结论为[CLI略优](docs/comparison-2026-10-26.md)；0.4新增参数宿主验证，见[本版记录](docs/release-0.4.md)。
-[架构](docs/architecture.md)和[长期覆盖目录](docs/coverage.md)是后续路线，不代表所有条目已经实现。
+The design drew on [CLI-Anything](https://github.com/HKUDS/CLI-Anything) and
+[OpenCLI](https://github.com/jackwener/OpenCLI). This is an independent project,
+not an Image-Line, HKUDS or OpenCLI product. [MIT license](LICENSE).

@@ -1,0 +1,89 @@
+{
+  "verdict": "CLI明显更优",
+  "scope": "Three equally weighted tasks in the already configured local FL environment. No general claim of covering all GUI workflows.",
+  "criteria": "criteria.md",
+  "versions": {
+    "cli": "0.4.0",
+    "cli_head": "5f18caa6ecb4485db2bc14cd49702c94695a1370",
+    "mcp": "0.3.0",
+    "mcp_server_revision": "localfix-20261026-notes-handoff",
+    "fl": "26.1.6.5639"
+  },
+  "objectives": [
+    {
+      "id": 1,
+      "weight": "1/3",
+      "comparison": "Both verified",
+      "cli": {"state_discovered":true,"tempo_readback":123,"insert_1_pan_readback":0.25,"restored":true},
+      "mcp": {"state_discovered":true,"tempo_readback":123,"insert_1_pan_readback":0.25,"restored":true},
+      "evidence": ["live-results.json","final-live-state.json"]
+    },
+    {
+      "id": 2,
+      "weight": "1/3",
+      "comparison": "CLI has verified saved-state and isolated-engine evidence; exact live state is unresolved for both",
+      "initial_emphasis":0.5013,
+      "requested_emphasis":0.25,
+      "cli_live": {"readback_numeric":0.5013,"readback_display":"25%","status":"unknown","reason_code":"live_value_not_confirmed"},
+      "mcp_live": {"readback_numeric":0.5013,"readback_display":"25%","ok":true,"exact_effect_unconfirmed":true},
+      "cli_saved": {
+        "path":"cli-plugin-verify/project.flp",
+        "readback":0.25,
+        "other_file_bytes_preserved":true,
+        "changed_event_id":213,
+        "changed_payload_byte_offsets":[8,9],
+        "diagnostic_effect_payloads_match_saved_states":true,
+        "diagnostic_projects_differ_only_in_target_plugin_state":true,
+        "native_pcm_difference_rms":0.10896154249803171,
+        "scope":"Saved effect state consumed by isolated FL engine with controlled input, not proof current GUI is at 0.25"
+      },
+      "mcp_persistence": "No save/export tool discovered; GUI save and persisted-effect confirmation unperformed",
+      "evidence":["live-results.json","cli-plugin-verify-result.json","cli-plugin-saved-params.json","independent-evidence.json"]
+    },
+    {
+      "id":3,
+      "weight":"1/3",
+      "comparison":"CLI delivered exact saved arrangement and native WAV; MCP delivered accurate MIDI with remaining manual workflow unverified",
+      "cli": {
+        "flp":"cli-arrangement.flp",
+        "wav":"cli-arrangement.wav",
+        "original_five_channels_preserved":true,
+        "mixer_and_effect_state_hashes_preserved":true,
+        "exact_notes":{"channel_index":0,"pattern_number":1,"key":60,"starts":[0,96,192,288,384,480,576,672],"length":24,"velocity":100},
+        "ppq":96,"bpm":130,
+        "clip":{"track":1,"start_tick":0,"length_tick":768,"count":1},
+        "pcm":{"sample_rate":44100,"bits":16,"channels":2,"frames":163043,"seconds":3.6971201814058956,"rms":0.10308832060063042,"peak":0.389556884765625}
+      },
+      "mcp": {
+        "midi":"mcp-arrangement.mid",
+        "native_midi_ppq":480,
+        "eight_notes_exact_when_normalized_to_ppq96":true,
+        "tempo_microseconds_per_beat":461538,
+        "flp_created":false,"wav_created":false,
+        "remaining_manual_steps":["Import into existing Kick channel 0 and Pattern 1","Place one Track 1 clip spanning 0..768 ticks","Save a new FLP preserving baseline channels and effects","Export WAV from real FL"],
+        "remaining_steps_status":"Unperformed, neither scored as failure nor assumed successful"
+      },
+      "evidence":["cli-arrangement-inspect.json","cli-arrangement-render-result.json","mcp-arrangement-results.json","independent-evidence.json"]
+    }
+  ],
+  "gui_observation": {
+    "error":"window capture timed out: timed out waiting on channel",
+    "attempts":1,"input_actions":0,"attributed_to_candidate":false,
+    "evidence":"gui-observation.json"
+  },
+  "restoration": {
+    "tempo_bpm":130,"insert_1_pan":0,"emphasis_numeric":0.5013,"emphasis_display":"50%",
+    "other_live_plugin_values_preserved":true,
+    "current_editor_saved_or_discarded":false,
+    "baseline_unchanged":true,
+    "baseline_sha256":"401b77f3e4e4a86bc1261bf16010d235de7a7c44ed3b6a4b27bbc6f0478edfa7"
+  },
+  "dependencies": {
+    "both_live_paths":["Running FL Studio","Previously configured local MIDI bridge and FL controller"],
+    "cli_saved_render":["Installed real FL engine","Existing baseline project and referenced samples/plugins"],
+    "mcp":["Provided Python environment and TCP bridge","GUI cooperation to finish the tested MIDI handoff"]
+  },
+  "untested":["Fresh-machine installation","Other plugins and arbitrary custom GUI controls","Successful human continuation of MIDI import/save/render","Long-term reliability or broad performance"],
+  "recommendation":"Use CLI for these saved-project edits and deliverables; MCP remains useful for existing-session discovery, basic controls and MIDI collaboration. This verdict reflects verified workflow evidence, not interface form or command count.",
+  "evaluation_notes":["An evaluator-only structured_content attribute typo was corrected before any MCP writes; not a candidate defect.","No candidate code, configuration or controller was modified; no historical reports, other chat/agent histories, or hosted web_search were used."]
+}

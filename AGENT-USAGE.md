@@ -1,32 +1,31 @@
-# 给 Agent 的运行入口
+# Agent quickstart / 给 Agent 的快速入口
 
-本机命令：`C:\Users\Owner\.local\bin\flstudio.exe`。新版终端也可直接用 `flstudio`。
-旧 Harness 进程可能还没刷新 PATH，此时使用绝对路径。
+Windows x64；本机验证为 FL Studio Producer 26.1.6.5639。Python 3.12+，安装 uv。
 
-当前版本0.4。已有本机MIDI桥连通时，用 `live status` 查看正在打开的FL；
-`live set-tempo`、`live set-mixer-pan` 和 `live set-plugin-param` 可直接操作当前会话。
-`live plugin-params --track 0 --slot 9` 会读取插件的参数名。未回读确认的写入返回unknown；live命令不保存工程。
-文件编曲/渲染仍可独立运行。新机若需要live能力，需另外部署兼容MIDI桥；它不是仅安装本CLI就具备的能力。
+```powershell
+git clone https://github.com/LiweiDonVee/flstudio-cli.git
+cd flstudio-cli
+uv tool install --editable . --python 3.12
+$fl = Join-Path $env:USERPROFILE '.local\bin\flstudio.exe'
+& $fl doctor
+```
 
-参数需要宿主确认时：`plugin verify --project FILE --track 0 --slot 9 --param Emphasis --value .25 --output-dir NEWDIR`。
-当前覆盖Emphasizer的Emphasis；输出NEWDIR/project.flp仅改目标参数，并以独立受控输入副本的真实FL音频验证状态生效。
-unknown表示响应证据不足，不能当完成。该命令不修改当前打开的工程。
+文件编曲无需MIDI桥、控制器脚本或MCP。默认FL安装目录为
+`C:\Program Files\Image-Line\FL Studio 2026`；不同位置用build的`--template`和render/verify的`--fl-install`指定。
 
-换机器部署：装好 Windows 版 FL Studio 与 uv，在此仓库目录运行 `uv tool install --editable . --python 3.12`，
-然后 `flstudio doctor`。无需 MIDI 端口、FL 控制器脚本、旧 MCP 或测试依赖。
-默认安装目录是 `C:\Program Files\Image-Line\FL Studio 2026`；不同目录用 build 的 `--template` 和 render 的 `--fl-install` 明确指定。
+1. 先 `project inspect --input FILE --summary`；需要完整音符时去掉summary。
+2. 新曲 `project build --request song.json --output NEW.flp`；已有工程 `project edit` 或 `notes replace`。格式见[请求说明](docs/quickstart-0.2.md)。
+3. Pattern编号从1开始，通道/Mixer/效果槽从0开始。时间是工程PPQ的整数ticks；保存文件的pan范围±6400，live pan范围±1，都以0居中。
+4. `--dry-run`只预览，不写工程、不渲染、不联系MIDI桥。输出必须是新路径，原曲不覆盖。
+5. `render wav --project NEW.flp --output NEW.wav`使用实际FL引擎。非空编曲导出静音或明显截短会失败。
+6. 参数需要生效证据时：`plugin verify --project FILE --track 0 --slot 9 --param Emphasis --value .25 --output-dir NEWDIR`。当前保存参数配置为Emphasizer v2 Emphasis；取用`NEWDIR/project.flp`，诊断probe副本不是用户编曲。
 
-1. 从用户的已保存工程读取：`project inspect --input FILE --summary`；需要音符则去掉 summary。
-2. 新曲用 `project build --request song.json --output NEW.flp`；格式见 [quickstart](docs/quickstart-0.2.md)。
-3. 改曲用 `project edit` 或 `notes replace`，指定明确 Pattern/通道和新的 output。原曲不覆盖。
-4. 预览加 `--dry-run`。此时不写工程、不生成音频、不触发 FL，不需要开启全局状态开关。
-5. `render wav --project NEW.flp --output NEW.wav` 会让真正的 FL 打开并渲染；非空曲目导出静音或截短会失败。
+`artifact_ready`表示保存文件回读；`verified_scopes`列出实际证据。参数验证的音频来自隔离副本和受控输入，不冒充当前GUI状态。
+遇到unknown或不支持的插件状态，不把它解释成成功。
 
-不要再调用旧 MCP 的选通道→连续Piano Roll脚本写入。GUI当前选中项不是音符目标。
-`artifact_ready` 是保存文件回读；`verified_scopes` 表明实际检查了什么。新副本需要在GUI打开后才成为人正在编辑的工程。
-保存工程编辑现支持FL26的88字节固定布局Playlist；未知变长布局仍不支持。
-不支持的自绘插件控件、Automation曲线或可变长度clip不能假装完成。
-这些部分由人继续在 GUI 编辑：保存后让 CLI 读取该已保存副本，再用新 output 返回下一版。
+人机协作方式：GUI保存当前工程 → CLI写新副本 → GUI打开新副本继续编辑。
+任意Automation、自绘插件控件和未知变长clip仍需GUI；文件修改不会暗中改变当前编辑器内存。
 
-现成示例：在项目目录运行 `flstudio project build --request examples/beat.json --output my-beat.flp`，
-再运行 `flstudio render wav --project my-beat.flp --output my-beat.wav`。
+可选live：先单独部署兼容的[flstudio-mcp MIDI桥](https://github.com/rosasynthesiz/flstudio-mcp)，确认本地9787与FL控制器连通；CLI直接使用该桥的TCP协议。
+`live status`、`live set-tempo`、`live set-mixer-pan`、`live plugin-params`、`live set-plugin-param`都可用。
+live写入不保存工程；修改前读原值，调试后恢复。它不是仅安装本CLI就具备的能力。
