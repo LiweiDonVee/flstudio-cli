@@ -36,14 +36,14 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     doc = Project.read(output)
     assert doc.tempo == 137 and [c['name'] for c in doc.channels()] == ['鼓', 'Bass']
     assert next(e.data for e in doc.events if e.id == 9) == b'\1', 'New arrangements must open in Song mode'
-    assert [n['channel_index'] for n in doc.patterns()[7]['notes']] == [0, 0, 1]
+    assert [n['channel_index'] for n in doc.patterns()[7]['notes']] == [0, 1, 0]
     assert doc.playlist()[0]['track'] == 3
     other = [n for n in doc.patterns()[7]['notes'] if n['channel_index'] == 1]
     doc.replace_notes(7, 0, [{'key': 39, 'start_tick': 96, 'length_tick': 48, 'velocity': 83}])
     doc.set_channel(0, {'pan_raw': -2000, 'mixer_track': 1})
     doc.set_mixer(1, {'volume_raw': 10000})
     changed = Project.read(doc.save(tmp_path / 'edited.flp'))
-    assert [n['channel_index'] for n in changed.patterns()[7]['notes']] == [0, 1], 'FL requires channel-ordered score records'
+    assert [n['channel_index'] for n in changed.patterns()[7]['notes']] == [1, 0], 'FL requires chronological records across channels'
     assert [n for n in changed.patterns()[7]['notes'] if n['channel_index'] == 1] == other
     assert [n['key'] for n in changed.patterns()[7]['notes'] if n['channel_index'] == 0] == [39]
     assert changed.channels()[0]['pan_raw'] == -2000

@@ -158,6 +158,7 @@ def replace_notes(project, pattern_number, channel_index, notes_path, output, dr
     saved = Project.read(output)
     actual = [n for n in saved.patterns()[pattern_number]['notes'] if n['channel_index'] == channel_index]
     expected = [(n.key, n.start_tick, n.length_tick, n.velocity) for n in request.notes]
+    expected.sort(key=lambda note: note[1])
     observed = [(n['key'], n['start_tick'], n['length_tick'], n['velocity']) for n in actual]
     if observed != expected:
         raise ValueError('Saved score does not match the requested notes')

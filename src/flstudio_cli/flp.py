@@ -18,12 +18,12 @@ HEADER = struct.Struct('<4sIhHH4sI')
 
 
 def _ordered_notes(data: bytes) -> bytes:
-    # FL loads score records in channel order. Appending an edited earlier
-    # channel after later channels makes its notes disappear in the engine,
+    # FL schedules a pattern's records chronologically across all channels.
+    # A record earlier than its predecessor can disappear in the engine,
     # although a flat binary readback still sees every record.
     records = [data[i:i + NOTE.size] for i in range(0, len(data), NOTE.size)]
-    records.sort(key=lambda record: (struct.unpack_from('<H', record, 6)[0],
-                                     struct.unpack_from('<I', record)[0]))
+    records.sort(key=lambda record: (struct.unpack_from('<I', record)[0],
+                                     struct.unpack_from('<H', record, 6)[0]))
     return b''.join(records)
 
 
