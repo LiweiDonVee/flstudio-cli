@@ -60,4 +60,5 @@ flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value 0.25
 遇到未识别的数据布局会拒绝处理。
 
 只保留 [三个工作流回归](tests/test_workflows.py)；实际 FL 导出和独立盲测另记在 [发布验证](docs/release-0.2.md)。
+当前0.3独立对比结论为[CLI略优](docs/comparison-2026-10-26.md)，尚未达到“明显更优”的GitHub发布门槛。
 [架构](docs/architecture.md)和[长期覆盖目录](docs/coverage.md)是后续路线，不代表所有条目已经实现。
