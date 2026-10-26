@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "flstudio-cli"
-version = "0.1.0"
-description = "Independent FL Studio CLI: read-only diagnostics and honest planning"
+version = "0.2.0"
+description = "Independent FL Studio project composing, inspection and native rendering CLI"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["click>=8.1,<9", "pydantic>=2.10,<3"]

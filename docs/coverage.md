@@ -1,13 +1,15 @@
 # 功能覆盖与验收矩阵
 
-截至 2026-10-26，**新 CLI 0.1.0 已实现 M0 的只读诊断、容器探测和纯规划**，离线与本机只读验收见 [m0-verification.md](m0-verification.md)。真实 FL 创作、语义读取、保存重开和渲染均未实现。下方长期功能矩阵的“已有证据”属于旧部署、本机软件文档或外部项目，不能移作新 CLI 的 supported 标签。来源见 [research.md](research.md)。
+当前0.2已实现保存工程的通道/采样/预设音源、音符、Pattern、固定布局Playlist、Mixer与效果器编辑，以及真实FL批渲染；见 [当前用法](quickstart-0.2.md) 与 [实际验证](release-0.2.md)。下方长期矩阵保留后续研究，不能将外部证据直接转成本项目已实现声明。
 
 | 新 CLI 当前操作 | implemented / availability | 本项目验证范围 | 限制 |
 | --- | --- | --- | --- |
 | doctor | true / available | offline_fixture；本机 environment_files | 只读文件 metadata、SHA-256 和依赖发现，不查询 live FL |
 | flp.container | true / available | offline_fixture；本机 flp_container | 仅 FLhd/FLdt，notes/patterns/playlist unavailable |
-| plan（包括 notes replace dry-run） | true / available | offline_fixture | selector 未绑定，executable=false，applied/verified count=null |
-| notes read/replace、pattern、playlist、mixer、plugin、automation、save、render | false / not_implemented | source_only；只有外部候选证据 | M1–M5 待实施；任何 apply 退出 7 |
+| plan、notes replace dry-run | true / available | saved_score目标和源SHA | 没有output路径时不可执行；不修改GUI |
+| notes read/replace、pattern、playlist、mixer、采样/预设加载、save copy | true / available | 保存文件回读；真实FL打开和音频验收 | 仅已支持文件布局，非live附着 |
+| render wav | true / available | 实际FL原生批渲染/PCM检查 | 独立Windows桌面，输出为新文件 |
+| live attach、任意插件UI、通用automation曲线 | false / not_implemented | 外部候选证据 | 仍需适配，明确不支持 |
 
 CLI `capabilities` 的 `verification_level=offline_fixture` 表示该实现的离线测试等级。此次本机文件读取另外记录在验收报告中，不升级为 live/persistence/audio 证书。没有 GUI/native 后端占位类或隐式旧系统依赖。
 

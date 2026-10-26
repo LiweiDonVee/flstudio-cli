@@ -1,32 +1,46 @@
 # FL Studio CLI
 
-独立的 Python 3.12+ CLI，当前版本 **0.1.0 / M0**。现在可以诊断安装文件、探测保存的 FLP 容器、查看能力目录、生成音符替换计划。**目前尚不能读取实际音符、操作 FL、保存或渲染工程。**
+独立的 **0.2.0** 本地 CLI，已能创建可由真实 FL Studio 打开和渲染的工程。
 
-所有命令默认输出一个 UTF-8 JSON Result，含 `schema_version: 1`；帮助、版本和错误也使用相同外层结构。计划中的 Pattern 编号与全局 Channel 索引只是未绑定的用户 selector，`executable=false`，实际应用和验证数量均为 `null`。真实 apply 入口明确拒绝并退出 7。
-
-在本目录安装和运行（已安装 [uv](https://docs.astral.sh/uv/) 和 Python 3.12+）：
+实际工作流：**JSON 编曲 → 新 FLP 副本 → 逐 Pattern/通道回读 → FL 原生 WAV 渲染**。
+不再依赖当前卷帘、抢焦点、快捷键脚本或旧 MCP 进程。
 
 ```powershell
 uv sync --locked
-uv run flstudio --help
-uv run python -m flstudio_cli --help
-uv run flstudio doctor --fl-install 'C:\Program Files\Image-Line\FL Studio 2026' --json
-uv run flstudio capabilities --json
-uv run pytest -q
+uv run flstudio project build --request song.json --output song.flp
+uv run flstudio project inspect --input song.flp --summary
+uv run flstudio render wav --project song.flp --output mix.wav
 ```
 
-本机可直接复制的诊断命令，无需将 uv 加入 PATH：
+[编曲请求格式与完整用法](docs/quickstart-0.2.md)
+
+可用功能：
+
+- 新建多个采样/音源通道，加载本机 generator 的 `.fst` 预设。
+- 明确指定 Pattern 和通道读写音符；替换一个通道时保留其他通道的原始音符记录。
+- Pattern 命名，安排和重复 Playlist pattern clips。
+- 修改样本路径、名称、音量、声像、通道到 Mixer 的路由。
+- Mixer 音量、声像、名称、静音、编组路由；从 `.fst` 加载效果器。
+- 保存到新副本；计划绑定源哈希，拒绝源变化和覆盖已有文件。
+- 在独立 Windows 桌面调用真实 FL 批渲染，检查新 WAV、实际帧数及音量。
+- `--dry-run` 不写工程、音频、脚本或状态文件。
 
 ```powershell
-& 'C:\Users\Owner\.cherrystudio\bin\uv.exe' --directory 'E:\WorkSpace\tools\flstudio-cli' run flstudio doctor --fl-install 'C:\Program Files\Image-Line\FL Studio 2026' --json
+uv run flstudio notes list --project song.flp --pattern-number 1 --channel-index 0
+uv run flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 --notes notes.json --output revision.flp
+uv run flstudio project edit --input song.flp --request changes.json --output mixed.flp
+uv run flstudio audio inspect --input mix.wav
+uv run flstudio capabilities
 ```
 
-`doctor` 只读取 FL64/FLEngine 文件版本、SHA-256 与工具发现信息，不启动 FL。`flp probe` 只验证 `FLhd/FLdt` 边界和稳定文件哈希，notes、patterns、playlist 始终报告 `unavailable`。有多个安装时必须用 `--fl-install` 选择。
+写入命令操作保存的工程副本，**不会把改动偷偷写进当前打开的 GUI**。
+结果中的 `artifact_ready` 证明文件已写入并回读；`fl_engine_export` 证明 FL 真正打开并导出了它。
+输出文件必须是新路径；原始工程保持不变。
 
-默认不创建 state、log、MIDI、工程或计划文件；`notes replace --dry-run` 和 `plan build` 共享纯计划函数。只有显式 `--plan-out` 可以创建指定的新计划文件，父目录必须已存在，已有文件一律不覆盖。CLI 没有旧 MCP、9787 端口、控制器或原生桥依赖。
+本机已验证 FL Studio Producer **26.1.6.5639**。新工程基于本机自带 Basic 模板；
+不附带或重新分发 Image-Line 的模板/插件。
+复杂编辑过的可变长度 Playlist clip、任意 Automation 曲线、任意第三方插件自绘控件和内存工程附着尚未支持，
+遇到未识别的数据布局会拒绝处理。
 
-- [实际命令与完整示例](docs/commands.md)：含合成容器、请求与示例计划的生成方法。
-- [M0 验收记录](docs/m0-verification.md)：本机只读基准、离线测试和准确限制。
-- [架构与决策](docs/architecture.md)、[阶段实施计划](docs/implementation-plan.md)、[功能覆盖矩阵](docs/coverage.md)、[调查与来源](docs/research.md)。
-
-M1 的五通道创作、Playlist、保存重开和真实 WAV 渲染仍在规划中。外部项目或旧系统的证据不表示新 CLI 已支持这些操作。
+只保留 [三个工作流回归](tests/test_workflows.py)；实际 FL 导出和独立盲测另记在 [发布验证](docs/release-0.2.md)。
+[架构](docs/architecture.md)和[长期覆盖目录](docs/coverage.md)是后续路线，不代表所有条目已经实现。

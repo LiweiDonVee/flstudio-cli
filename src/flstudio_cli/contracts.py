@@ -36,8 +36,8 @@ class Result(Contract):
 
 class NoteInput(Contract):
     key: int = Field(ge=0, le=127)
-    start_tick: int = Field(ge=0)
-    length_tick: int = Field(gt=0)
+    start_tick: int = Field(ge=0, le=4294967295)
+    length_tick: int = Field(gt=0, le=4294967295)
     velocity: int = Field(ge=1, le=127)
 
 
@@ -47,10 +47,13 @@ class NotesReplaceRequest(Contract):
     pattern_number: int = Field(ge=1)
     channel_index: int = Field(ge=0)
     notes: list[NoteInput]
+    output: Path | None = None
 
-    @field_validator("project", mode="before")
+    @field_validator("project", "output", mode="before")
     @classmethod
     def absolute_project(cls, value: Any) -> Path:
+        if value is None:
+            return None
         if not isinstance(value, (str, Path)) or not str(value).strip():
             raise ValueError("project must be a nonempty filesystem path")
         return Path(value).resolve()
@@ -61,9 +64,9 @@ class Plan(Contract):
     request: NotesReplaceRequest
     request_sha256: str
     source_sha256: str
-    executable: Literal[False] = False
-    target_resolution: Literal["unresolved_selectors"] = "unresolved_selectors"
-    bound_target: None = None
+    executable: bool = False
+    target_resolution: Literal['unresolved_selectors', 'saved_score'] = 'unresolved_selectors'
+    bound_target: dict[str, int] | None = None
     unmet_requirements: list[str]
     effects: list[str]
     requested_count: int = Field(ge=0)
