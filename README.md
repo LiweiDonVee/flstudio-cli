@@ -1,6 +1,6 @@
 # FL Studio CLI
 
-**0.3.0** 本地 CLI，可创建和编辑真实 FL 工程，并调用 FL 原生渲染。
+**0.4.0** 本地 CLI，可创建和编辑真实 FL 工程，并调用 FL 原生渲染。
 
 实际工作流：**JSON 编曲 → 新 FLP 副本 → 逐 Pattern/通道回读 → FL 原生 WAV 渲染**。
 文件编曲不依赖当前卷帘、抢焦点、快捷键脚本或 MCP。可选的 `live` 命令复用已有本地 MIDI 桥，直接操作打开的 FL。
@@ -50,6 +50,15 @@ flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value 0.25
 不启动 MCP 前端或修改端口配置；`--dry-run` 不连接桥。实际值未收敛时返回 `unknown`，没有保存工程。
 保存文件的单参数修改见 [0.3 用法与验证](docs/release-0.3.md)。
 
+参数回读矛盾时，可直接保存精确修改并用真实 FL 取得音频响应证据：
+
+```powershell
+flstudio plugin verify --project song.flp --track 0 --slot 9 --param Emphasis --value .25 --output-dir checked
+```
+
+生成只改目标参数的 `checked/project.flp`；独立诊断副本使用受控输入，避免安静鼓点使效果差异无法观测。
+当前验证配置覆盖 Emphasizer 的 Emphasis；它确认保存状态和原生音频响应，不表示当前打开的工程已修改。
+
 写入命令操作保存的工程副本，**不会把改动偷偷写进当前打开的 GUI**。
 结果中的 `artifact_ready` 证明文件已写入并回读；`fl_engine_export` 证明 FL 真正打开并导出了它。
 输出文件必须是新路径；原始工程保持不变。
@@ -60,5 +69,5 @@ flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value 0.25
 遇到未识别的数据布局会拒绝处理。
 
 只保留 [三个工作流回归](tests/test_workflows.py)；实际 FL 导出和独立盲测另记在 [发布验证](docs/release-0.2.md)。
-当前0.3独立对比结论为[CLI略优](docs/comparison-2026-10-26.md)，尚未达到“明显更优”的GitHub发布门槛。
+0.3的历史独立对比结论为[CLI略优](docs/comparison-2026-10-26.md)；0.4新增参数宿主验证，见[本版记录](docs/release-0.4.md)。
 [架构](docs/architecture.md)和[长期覆盖目录](docs/coverage.md)是后续路线，不代表所有条目已经实现。

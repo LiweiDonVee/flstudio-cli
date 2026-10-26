@@ -47,6 +47,11 @@ def list_capabilities() -> list[dict]:
                                   limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque',
                                                'Saved-state readback; host parameter activation is not independently confirmed'],
                                   last_evidence='docs/release-0.3.md'))
+    implemented.append(Capability(operation='plugin.verify', implemented=True, availability='available',
+                                  verification_level='audio', backend='fl_native_batch',
+                                  limitations=['Emphasizer state-v2 Emphasis profile',
+                                               'Controlled-input probe of copied effect; does not verify the open editor'],
+                                  last_evidence='docs/release-0.4.md'))
     for operation, evidence in external.items():
         implemented.append(Capability(operation=operation, implemented=False, availability="not_implemented",
                                       verification_level="source_only", backend=None,

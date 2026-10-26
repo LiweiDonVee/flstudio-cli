@@ -3,10 +3,14 @@
 本机命令：`C:\Users\Owner\.local\bin\flstudio.exe`。新版终端也可直接用 `flstudio`。
 旧 Harness 进程可能还没刷新 PATH，此时使用绝对路径。
 
-当前版本0.3。已有本机MIDI桥连通时，用 `live status` 查看正在打开的FL；
+当前版本0.4。已有本机MIDI桥连通时，用 `live status` 查看正在打开的FL；
 `live set-tempo`、`live set-mixer-pan` 和 `live set-plugin-param` 可直接操作当前会话。
 `live plugin-params --track 0 --slot 9` 会读取插件的参数名。未回读确认的写入返回unknown；live命令不保存工程。
 文件编曲/渲染仍可独立运行。新机若需要live能力，需另外部署兼容MIDI桥；它不是仅安装本CLI就具备的能力。
+
+参数需要宿主确认时：`plugin verify --project FILE --track 0 --slot 9 --param Emphasis --value .25 --output-dir NEWDIR`。
+当前覆盖Emphasizer的Emphasis；输出NEWDIR/project.flp仅改目标参数，并以独立受控输入副本的真实FL音频验证状态生效。
+unknown表示响应证据不足，不能当完成。该命令不修改当前打开的工程。
 
 换机器部署：装好 Windows 版 FL Studio 与 uv，在此仓库目录运行 `uv tool install --editable . --python 3.12`，
 然后 `flstudio doctor`。无需 MIDI 端口、FL 控制器脚本、旧 MCP 或测试依赖。

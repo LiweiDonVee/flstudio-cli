@@ -63,6 +63,10 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     assert param_copy.plugin_parameters(0, 9)['params'][0]['v'] == .25
     actual = param_copy._effect_state(0, 9)[1].data
     assert actual[:8] == previous[:8] and actual[12:] == previous[12:]
+    probe = create_project(spec, template)
+    probe.load_effect(0, 0, native_copy.effect_events(0, 9))
+    probe.set_plugin_parameter(0, 0, 'Emphasis', .4)
+    assert native_copy._effect_state(0, 9)[1].data == actual, 'Verification must copy rather than mutate the source effect'
 
 
 def test_cli_build_preview_and_source_preservation(tmp_path):
@@ -86,6 +90,11 @@ def test_cli_build_preview_and_source_preservation(tmp_path):
         preview = runner.invoke(app, ['live', '--bridge-port', '1', *command, '--dry-run'])
         assert preview.exit_code == 0 and json.loads(preview.output)['data']['bridge_contacted'] is False
     assert output.read_bytes() == stored
+    verify_output = tmp_path / 'parameter-check'
+    profile = template.parent.parent / 'Basic with limiter/Basic with limiter.flp'
+    preview = runner.invoke(app, ['plugin', 'verify', '--project', str(profile), '--track', '0',
+        '--slot', '9', '--param', 'Emphasis', '--value', '.25', '--output-dir', str(verify_output), '--dry-run'])
+    assert preview.exit_code == 0 and json.loads(preview.output)['status'] == 'planned' and not verify_output.exists()
 
 
 def test_unknown_events_and_json_numbers_are_not_silently_corrupted(tmp_path):

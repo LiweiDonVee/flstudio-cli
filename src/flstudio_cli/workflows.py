@@ -178,6 +178,26 @@ def register(app, emit, json_option):
         emit(Result(command='plugin params', status='verified', verified_scopes=['saved_plugin_param'],
                     data=doc.plugin_parameters(track, slot)))
 
+    @plugin_group.command('verify')
+    @click.option('--project', required=True, type=click.Path(path_type=Path))
+    @click.option('--track', required=True, type=click.IntRange(0, 125))
+    @click.option('--slot', required=True, type=click.IntRange(0, 9))
+    @click.option('--param', required=True)
+    @click.option('--value', required=True, type=click.FloatRange(0, 1))
+    @click.option('--output-dir', required=True, type=click.Path(path_type=Path))
+    @click.option('--fl-install', default=DEFAULT_INSTALL, type=click.Path(path_type=Path))
+    @click.option('--dry-run', is_flag=True)
+    @json_option
+    def verify_param(project, track, slot, param, value, output_dir, fl_install, dry_run):
+        """Save a precise parameter edit and verify its audio response in FL."""
+        from .plugin_verify import verify
+        data = verify(project, track, slot, param, value, output_dir, fl_install, dry_run)
+        emit(Result(command='plugin verify', status=data['status'], reason_code=data.get('reason'),
+                    verified_scopes=['saved_plugin_param', 'fl_engine_export', 'plugin_audio_response']
+                    if data['status'] == 'verified' else [], data=data))
+        if data['status'] in ('failed', 'unknown'):
+            raise click.exceptions.Exit(5)
+
     @app.group('render')
     @json_option
     def render_group():

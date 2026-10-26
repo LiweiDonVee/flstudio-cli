@@ -40,7 +40,7 @@ def preset_events(path: Path | str) -> list[Event]:
     legacy = int(preset.version.split('.')[0]) < 11
     result = []
     for event in preset.events:
-        if event.id in (201, 203, 212, 213, 155, 128):
+        if event.id in (201, 203, 212, 213, 155, 128, 41):
             data = event.data
             if legacy and event.id in (201, 203):
                 data = string(data.rstrip(b'\0').decode('cp1252'))
@@ -469,7 +469,7 @@ class Project:
             if not found:
                 raise ValueError('Mixer parameter is absent; refusing to invent a host event')
 
-    def load_effect(self, track: int, slot: int, preset: Path | str):
+    def load_effect(self, track: int, slot: int, preset: Path | str | list[Event]):
         if type(slot) is not int or not 0 <= slot < 10:
             raise ValueError('Effect slot must be 0..9')
         spans = self.mixer_spans()
@@ -482,8 +482,9 @@ class Project:
             if event.id == 98:
                 if int.from_bytes(event.data, 'little') == slot:
                     existing = self.events[position:i]
-                    keep = [e for e in existing if e.id not in (201, 203, 212, 213, 155, 128)]
-                    plugin = preset_events(preset)
+                    keep = [e for e in existing if e.id not in (201, 203, 212, 213, 155, 128, 41)]
+                    plugin = ([Event(e.id, e.data) for e in preset] if isinstance(preset, list)
+                              else preset_events(preset))
                     for item in plugin:
                         if item.id == 212:
                             if len(item.data) < 8:
@@ -498,6 +499,19 @@ class Project:
                     return
                 position = i + 1
         raise ValueError('Effect slot was not found in the mixer profile')
+
+    def effect_events(self, track: int, slot: int) -> list[Event]:
+        self._effect_state(track, slot)
+        start, end = self.mixer_spans()[track]
+        position = start
+        for index in range(start, end):
+            event = self.events[index]
+            if event.id == 98:
+                if int.from_bytes(event.data, 'little') == slot:
+                    return [Event(e.id, e.data) for e in self.events[position:index]
+                            if e.id in (201, 203, 212, 213, 155, 128, 41)]
+                position = index + 1
+        raise ValueError('Effect slot is absent')
 
     def _effect_state(self, track: int, slot: int):
         spans = self.mixer_spans()
