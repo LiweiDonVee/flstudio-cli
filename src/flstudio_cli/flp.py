@@ -476,7 +476,18 @@ class Project:
                 if int.from_bytes(event.data, 'little') == slot:
                     existing = self.events[position:i]
                     keep = [e for e in existing if e.id not in (201, 203, 212, 213, 155, 128)]
-                    self.events[position:i] = keep + preset_events(preset)
+                    plugin = preset_events(preset)
+                    for item in plugin:
+                        if item.id == 212:
+                            if len(item.data) < 8:
+                                raise ValueError('Effect preset has no host track/slot address')
+                            # An FST retains its original host address. Merely
+                            # placing its events in another insert still loads
+                            # it on that old track (often Master).
+                            data = bytearray(item.data)
+                            struct.pack_into('<II', data, 0, track, slot)
+                            item.data = bytes(data)
+                    self.events[position:i] = keep + plugin
                     return
                 position = i + 1
         raise ValueError('Effect slot was not found in the mixer profile')

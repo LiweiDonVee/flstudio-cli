@@ -99,7 +99,8 @@ def inspect_environment(fl_install: Path | None) -> Result:
         tools[name] = {"path": str(Path(found).resolve()) if found else None,
                        "discovered": found is not None, "version": None, "version_reason": "not_executed"}
     data = {"runtime": runtime, "tools": tools,
-            "backends": {name: "not_implemented" for name in ("windows_gui", "official_midi", "fruitylink_native", "flp_semantic")}}
+            "backends": {name: "not_implemented" for name in ("windows_gui", "official_midi", "fruitylink_native")}}
+    data['backends'].update(flp_semantic='implemented', fl_native_batch='installation_not_found')
     candidates = discover_installations() if fl_install is None else [Path(fl_install).resolve()]
     if len(candidates) > 1:
         return Result(command="doctor", status="rejected", reason_code="ambiguous_fl_install",
@@ -114,6 +115,7 @@ def inspect_environment(fl_install: Path | None) -> Result:
     if any(file["version_reason"] == "source_changed" for file in files.values()):
         return Result(command="doctor", status="failed", reason_code="source_changed", data=data)
     complete = all(file["file_version"] is not None and file["sha256"] is not None for file in files.values())
+    data['backends']['fl_native_batch'] = 'installation_discovered' if complete and os.name == 'nt' else 'installation_incomplete'
     return Result(command="doctor", status="verified" if complete else "partial",
                   reason_code=None if complete else "fl_install_incomplete",
                   verified_scopes=["environment_files"], data=data)
