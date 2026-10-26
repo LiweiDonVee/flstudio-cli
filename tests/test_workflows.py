@@ -43,6 +43,7 @@ def test_project_roundtrip_and_exact_score_edit(tmp_path):
     doc.set_channel(0, {'pan_raw': -2000, 'mixer_track': 1})
     doc.set_mixer(1, {'volume_raw': 10000})
     changed = Project.read(doc.save(tmp_path / 'edited.flp'))
+    assert [n['channel_index'] for n in changed.patterns()[7]['notes']] == [0, 1], 'FL requires channel-ordered score records'
     assert [n for n in changed.patterns()[7]['notes'] if n['channel_index'] == 1] == other
     assert [n['key'] for n in changed.patterns()[7]['notes'] if n['channel_index'] == 0] == [39]
     assert changed.channels()[0]['pan_raw'] == -2000

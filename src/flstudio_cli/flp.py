@@ -17,6 +17,16 @@ NOTE = struct.Struct('<IHHIHH8B')
 HEADER = struct.Struct('<4sIhHH4sI')
 
 
+def _ordered_notes(data: bytes) -> bytes:
+    # FL loads score records in channel order. Appending an edited earlier
+    # channel after later channels makes its notes disappear in the engine,
+    # although a flat binary readback still sees every record.
+    records = [data[i:i + NOTE.size] for i in range(0, len(data), NOTE.size)]
+    records.sort(key=lambda record: (struct.unpack_from('<H', record, 6)[0],
+                                     struct.unpack_from('<I', record)[0]))
+    return b''.join(records)
+
+
 def text(data: bytes) -> str:
     return data.decode('utf-16le').rstrip('\0')
 
@@ -253,11 +263,11 @@ class Project:
                     raise ValueError('Unsupported note record length')
                 kept = b''.join(event.data[i:i + NOTE.size] for i in range(0, len(event.data), NOTE.size)
                                 if append or struct.unpack_from('<H', event.data, i + 6)[0] != iid)
-                event.data = kept + additions
+                event.data = _ordered_notes(kept + additions)
                 return
         # Score blocks precede Channel Rack data. Metadata is a separate later section.
         start = self.channel_spans()[0][0]
-        self.events[start:start] = [Event(65, struct.pack('<H', pattern)), Event(224, additions)]
+        self.events[start:start] = [Event(65, struct.pack('<H', pattern)), Event(224, _ordered_notes(additions))]
 
     def name_pattern(self, number: int, name: str):
         current = None
