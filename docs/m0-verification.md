@@ -11,7 +11,7 @@
 
 ## 离线行为测试
 
-`uv run pytest -q`：**78 passed**。普通 pytest 只运行离线测试，不启动 FL，没有自动 live hook。
+`uv run pytest -q`：**80 passed**。普通 pytest 只运行离线测试，不启动 FL，没有自动 live hook。
 
 测试先运行于缺失实现上，确认失败，再实现并复跑。覆盖重点：
 

@@ -84,3 +84,13 @@ def test_schema_version_refuses_coercion(value):
 
     with pytest.raises(ValidationError):
         Result(schema_version=value, command="test", status="verified")
+
+
+def test_duplicate_surrogate_key_diagnostic_is_utf8_safe():
+    from flstudio_cli.json_output import JsonValueError, decode_json
+
+    with pytest.raises(JsonValueError) as exc:
+        decode_json(r'{"\ud800":1,"\ud800":2}')
+    diagnostic = str(exc.value)
+    diagnostic.encode("utf-8")
+    assert r'"\ud800"' in diagnostic

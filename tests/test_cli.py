@@ -158,6 +158,15 @@ def test_invalid_oversized_json_integer_is_a_structured_error(tmp_path):
     assert code == 2 and result["reason_code"] == "invalid_json"
 
 
+def test_duplicate_surrogate_key_returns_structured_invalid_json(tmp_path):
+    request = tmp_path / "duplicate-surrogate.json"
+    request.write_text(r'{"\ud800":1,"\ud800":2}', encoding="utf-8")
+    code, result = cli("plan", "build", "--request", request, "--json")
+    assert code == 2 and result["reason_code"] == "invalid_json"
+    assert result["status"] == "rejected"
+    assert r'"\ud800"' in result["data"]["message"]
+
+
 def test_unexpected_application_error_is_still_json(monkeypatch, capsys):
     from flstudio_cli import cli as entrypoint
 

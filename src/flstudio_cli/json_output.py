@@ -72,7 +72,7 @@ def decode_json(text: str) -> Any:
         obj = {}
         for key, value in pairs:
             if key in obj:
-                raise JsonValueError("$", f"duplicate object key: {key}")
+                raise JsonValueError("$", f"duplicate object key: {json.dumps(key, ensure_ascii=True)}")
             obj[key] = value
         return obj
 
