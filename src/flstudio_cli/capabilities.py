@@ -48,9 +48,21 @@ def list_capabilities() -> list[dict]:
                                   last_evidence='docs/release-0.4.1.md'))
     implemented.append(Capability(operation='plugin.saved_param', implemented=True, availability='available',
                                   verification_level='persistence', backend='flp_file',
-                                  limitations=['Emphasizer state-v2 Emphasis profile only; other saved plugin blobs stay opaque',
-                                               'Saved-state readback; host parameter activation is not independently confirmed'],
-                                  last_evidence='docs/release-0.3.md'))
+                                  limitations=['Emphasizer Emphasis; named native host-control profiles for Sytrus, EQ2, Reeverb2, Soft Clipper and Limiter',
+                                               'Unknown preset values stay null; raw native units and normalized live values are distinct'],
+                                  last_evidence='docs/release-0.5.md'))
+    for operation in ('plugin.preset_list', 'sytrus.host_controls', 'mixer.fx_chains', 'mixer.send_levels'):
+        implemented.append(Capability(operation=operation, implemented=True, availability='available',
+                                      verification_level='persistence' if operation == 'plugin.preset_list' else 'audio',
+                                      backend='flp_file', profile='FL 26.1.6.5639',
+                                      limitations=['Saved project copies; detailed profiles and units in docs/sytrus-mixing.md',
+                                                   'Chain replacement rejects automation/controller links'],
+                                      last_evidence='docs/release-0.5.md'))
+    implemented.append(Capability(operation='live.generator_params', implemented=True, availability='available',
+                                  verification_level='source_only', backend='local_midi_bridge',
+                                  limitations=['Requires installed and reloaded CLI controller extension; --channel is global',
+                                               'Host-exposed parameters only; write requires independent readback'],
+                                  last_evidence='docs/sytrus-mixing.md'))
     implemented.append(Capability(operation='plugin.verify', implemented=True, availability='available',
                                   verification_level='audio', backend='fl_native_batch',
                                   limitations=['Emphasizer state-v2 Emphasis profile',

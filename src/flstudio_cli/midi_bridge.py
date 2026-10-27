@@ -70,6 +70,7 @@ class MidiRelay:
         self.pending_lock = threading.Lock()
         self.pending = {}
         self.last_heartbeat = None
+        self.controller = None
         self.heartbeat = threading.Event()
 
         def resolve(pattern, names):
@@ -86,8 +87,21 @@ class MidiRelay:
         except Exception:
             self.output.close()
             raise
+        # FL can restore RX as a second output on the same numbered port.
+        # Accept protocol replies from that loop too; request echoes (dir=1)
+        # are ignored by receive, so this does not execute commands twice.
+        self.return_input = None
+        self.return_input_error = None
+        alternate = [n for n in mido.get_input_names() if output_pattern.casefold() in n.casefold()]
+        if len(alternate) == 1 and alternate[0] != self.port_from_fl:
+            try:
+                self.return_input = mido.open_input(alternate[0], callback=self.receive)
+            except OSError as error:
+                self.return_input_error = str(error)
 
     def close(self):
+        if self.return_input is not None:
+            self.return_input.close()
         self.input.close()
         self.output.close()
 
@@ -103,6 +117,7 @@ class MidiRelay:
             return
         if packet[4] == 3:
             self.last_heartbeat = time.monotonic()
+            self.controller = payload
             self.heartbeat.set()
         elif packet[4] == 2:
             identifier = packet[5:13].decode('ascii')
@@ -116,7 +131,9 @@ class MidiRelay:
         age = None if self.last_heartbeat is None else max(0, time.monotonic() - self.last_heartbeat)
         return {'backend': BACKEND, 'version': __version__, 'pid': os.getpid(),
                 'alive': age is not None and age <= 3, 'heartbeat_age': age,
-                'port_to_fl': self.port_to_fl, 'port_from_fl': self.port_from_fl}
+                'port_to_fl': self.port_to_fl, 'port_from_fl': self.port_from_fl,
+                'alternate_return_port': self.return_input.name if self.return_input else None,
+                'alternate_return_error': self.return_input_error, 'controller': self.controller}
 
     def call(self, command, params, timeout):
         with self.request_lock:
@@ -179,6 +196,32 @@ def register(app, emit, json_option):
     @json_option
     def bridge_group():
         """Run the CLI's own MIDI relay without an MCP server or daemon."""
+
+    @bridge_group.command('install-controller-extension')
+    @click.option('--controller-dir', type=click.Path(path_type=Path),
+                  default=Path.home() / 'Documents/Image-Line/FL Studio/Settings/Hardware/FLStudioMCP')
+    @json_option
+    def install_extension(controller_dir):
+        """Add global generator parameters to the configured compatible controller."""
+        import shutil
+        controller_dir = controller_dir.resolve()
+        script = controller_dir / 'device_FLStudioMCP.py'
+        if not script.is_file():
+            raise ValueError('Compatible device_FLStudioMCP.py was not found; specify --controller-dir')
+        source = script.read_text(encoding='utf-8-sig')
+        marker = '# FLSTUDIO_CLI_EXTENSION'
+        helper = controller_dir / 'flstudio_cli_extension.py'
+        if marker not in source:
+            backup = script.with_suffix('.py.pre-cli-extension.bak')
+            if not backup.exists():
+                shutil.copy2(script, backup)
+            source += ('\n\n' + marker + '\nfrom flstudio_cli_extension import install as _install_cli_extension\n'
+                       '_install_cli_extension(_HANDLERS)\n')
+        helper.write_bytes(Path(__file__).with_name('controller_extension.py').read_bytes())
+        script.write_text(source, encoding='utf-8')
+        emit(Result(command='bridge install-controller-extension', status='artifact_ready',
+                    verified_scopes=['controller_files'], data={'controller': str(script), 'extension': str(helper),
+                    'needs_reload': True, 'instruction': 'FL Options > Refresh MIDI device list / Update MIDI scripts; no project restart required'}))
 
     @bridge_group.command('serve')
     @click.option('--port', default=9787, type=click.IntRange(1, 65535))

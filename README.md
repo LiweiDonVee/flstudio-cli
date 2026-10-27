@@ -39,6 +39,24 @@ Every edit creates a new file; existing outputs and source files are never overw
 
 [Request format and units](docs/quickstart-0.2.md) · [Agent quickstart](AGENT-USAGE.md)
 
+## Sytrus and complete mixer chains
+
+```powershell
+flstudio plugin presets --plugin Sytrus --search bass
+flstudio project build --request examples/sytrus-mix.json --output synth-mix.flp
+flstudio render wav --project synth-mix.flp --output synth-mix.wav
+flstudio sytrus params --project synth-mix.flp --channel 0 --search master
+```
+
+Build/edit requests can combine Sytrus native host controls, Channel → Insert →
+Bus → Master routing, send levels, and complete effect chains. Load, copy, move,
+swap or remove slots while retaining preset state, host overrides, bypass and
+wet/dry settings. Saved parameter profiles also cover Parametric EQ 2,
+Reeverb 2, Soft Clipper and Limiter controls.
+
+[Sytrus, mixer and FX request reference](docs/sytrus-mixing.md) ·
+[0.5 native audio evidence](docs/release-0.5.md)
+
 ## Parameter state and actual audio response
 
 ```powershell
@@ -50,7 +68,9 @@ flstudio plugin verify --project song.flp --track 0 --slot 9 --param Emphasis --
 copies run the copied effect before/after the change with the same controlled
 input and are rendered by FL itself. The result identifies this isolated
 verification context; it does not imply the open editor changed.
-The saved-state profile currently covers Emphasizer v2 **Emphasis** only.
+This dedicated controlled-input verifier covers Emphasizer v2 **Emphasis**.
+Sytrus and the other native effect profiles use saved host-control overrides;
+their practical audio checks are documented in the 0.5 report.
 
 ## Optional live control
 
@@ -75,6 +95,7 @@ flstudio live set-tempo --bpm 130
 flstudio live set-mixer-pan --track 1 --value .25
 flstudio live plugin-params --track 0 --slot 9
 flstudio live set-plugin-param --track 0 --slot 9 --param Emphasis --value .25
+flstudio live plugin-params --channel 0 --search Master
 ```
 
 The client also remains compatible with the local bridge from
@@ -96,7 +117,7 @@ is **GUI save → CLI new copy → GUI open the copy**.
 Arbitrary automation curves, unknown variable-layout Playlist clips and custom
 third-party plugin controls are outside the current implementation.
 
-Three workflow regressions are maintained; native application and independent
+Four workflow regressions are maintained; native application and independent
 comparison evidence is documented separately. Development checks require a
 local FL installation:
 

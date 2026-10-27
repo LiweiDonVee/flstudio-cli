@@ -1,5 +1,7 @@
 # FL CLI 0.2：实际创作路径
 
+0.5 新增的 Sytrus 参数、发送电平与完整效果链，见 [Sytrus 与混音工作流](sytrus-mixing.md)。下列原有请求格式继续兼容。
+
 运行项目内 `.venv\Scripts\flstudio.exe`。所有业务结果为 JSON，计数区分输入、保存文件和 FL 渲染。
 命令修改新工程副本，绝不依赖当前卷帘或旧 MCP 的选中项。输入文件不会覆盖。
 

@@ -1,0 +1,46 @@
+{
+  "tempo_bpm": 120,
+  "channels": [
+    {"name":"Sytrus Lead","plugin_preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Generators/Sytrus/Default subtractive.fst","mixer_track":1,"volume_raw":8500},
+    {"name":"Sytrus Bass","plugin_preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Generators/Sytrus/Default.fst","mixer_track":2,"volume_raw":9500}
+  ],
+  "patterns": [{"number":1,"name":"Sytrus Mix","scores":[
+    {"channel_index":0,"notes":[
+      {"key":48,"start_tick":0,"length_tick":72,"velocity":90},
+      {"key":51,"start_tick":96,"length_tick":72,"velocity":85},
+      {"key":55,"start_tick":192,"length_tick":72,"velocity":95},
+      {"key":58,"start_tick":288,"length_tick":72,"velocity":85},
+      {"key":55,"start_tick":384,"length_tick":144,"velocity":90},
+      {"key":51,"start_tick":576,"length_tick":144,"velocity":85}
+    ]},
+    {"channel_index":1,"notes":[
+      {"key":24,"start_tick":0,"length_tick":144,"velocity":90},
+      {"key":24,"start_tick":192,"length_tick":144,"velocity":85},
+      {"key":20,"start_tick":384,"length_tick":144,"velocity":90},
+      {"key":22,"start_tick":576,"length_tick":144,"velocity":85}
+    ]}
+  ]}],
+  "playlist":[
+    {"pattern_number":1,"track":1,"start_tick":0,"length_tick":768},
+    {"pattern_number":1,"track":1,"start_tick":768,"length_tick":768}
+  ],
+  "mixer":[
+    {"track":1,"name":"LEAD","routes":[6]},
+    {"track":2,"name":"BASS","routes":[6],"sends":[{"to":6,"level":0.9}]},
+    {"track":6,"name":"SYNTH BUS","routes":[0]}
+  ],
+  "sytrus":[
+    {"channel":0,"params":[{"param":"master_level","value_raw":80},{"param":"mod_x","value_raw":256}]},
+    {"channel":1,"params":[{"param":"master_level","value_raw":75}]}
+  ],
+  "fx_chains":[{"track":6,"slots":[
+    {"slot":0,"preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Effects/Fruity Parametric EQ 2/Default.fst"},
+    {"slot":1,"preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Effects/Fruity Soft Clipper/Default.fst"},
+    {"slot":2,"preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Effects/Fruity Reeverb 2/Default.fst","wet":0.25},
+    {"slot":3,"preset":"C:/Program Files/Image-Line/FL Studio 2026/Data/Patches/Plugin presets/Effects/Fruity Limiter/Default.fst"}
+  ]}],
+  "plugin_params":[
+    {"track":6,"slot":0,"param":"main_level","value_raw":-150},
+    {"track":6,"slot":2,"param":"decay","value_raw":20}
+  ]
+}

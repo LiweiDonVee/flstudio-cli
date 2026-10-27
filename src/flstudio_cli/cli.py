@@ -294,3 +294,5 @@ from .live import register as register_live
 register_live(app, _emit, json_option)
 from .midi_bridge import register as register_bridge
 register_bridge(app, _emit, json_option)
+from .sytrus import register as register_sytrus
+register_sytrus(app, _emit, json_option)

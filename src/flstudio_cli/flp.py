@@ -347,6 +347,11 @@ class Project:
                 location = next(i for i, e in enumerate(keep) if e.id == 21) + 1
                 keep[location:location] = [e for e in preset if e.id in (201, 212, 213)]
                 self.events[start:end] = keep
+                # A complete new generator preset must not inherit the
+                # previous preset's host parameter initializations.
+                from .mixing import _erase_plugin_controls
+                iid = int.from_bytes(mapping[64].data, 'little')
+                _erase_plugin_controls(self, iid << 16)
             else:
                 raise ValueError(f'Unsupported channel change: {key}')
 
@@ -390,9 +395,10 @@ class Project:
                 ident = event.data[offset + 4]
                 route = struct.unpack_from('<H', event.data, offset + 6)[0]
                 track, value = selectors.get(route & 0xffc0), struct.unpack_from('<i', event.data, offset + 8)[0]
-                if track is not None and track < len(tracks) and ident in (192, 193):
+                if event.data[offset + 5] == 31 and track is not None and track < len(tracks) and ident in (192, 193):
                     tracks[track]['volume_raw' if ident == 192 else 'pan_raw'] = value
-        return tracks
+        from .mixing import describe_mixer
+        return describe_mixer(self, tracks)
 
     def _mixer_selectors(self):
         # Mixer REC addresses contain a host-specific prefix. Do not truncate
@@ -401,18 +407,28 @@ class Project:
         for event in self.events:
             if event.id == 225:
                 for offset in range(0, len(event.data), 12):
-                    if event.data[offset + 4] == 192:
+                    if event.data[offset + 4:offset + 6] == b'\xc0\x1f':
                         values.append(struct.unpack_from('<H', event.data, offset + 6)[0] & 0xffc0)
         if len(values) != len(set(values)):
             raise ValueError('Ambiguous mixer parameter address list')
         return {selector: index for index, selector in enumerate(values)}
 
     def set_mixer(self, track: int, changes: dict):
-        if type(track) is not int or not 0 <= track < len(self.mixer()):
+        if type(track) is not int or not 0 <= track < len(self.mixer()) - 1:
             raise ValueError('Mixer index is not in this saved project')
         selectors = self._mixer_selectors()
-        for key, value in changes.items():
-            if key in ('name', 'muted', 'routes'):
+        if 'sends' in changes and 'routes' in changes:
+            if any(s.get('to') not in changes['routes'] for s in changes['sends']):
+                raise ValueError('Explicit sends must belong to the explicit routes array')
+        ordered = [(key, value) for key, value in changes.items() if key != 'sends']
+        if 'sends' in changes:
+            ordered.append(('sends', changes['sends']))
+        for key, value in ordered:
+            if key == 'sends':
+                from .mixing import set_sends
+                set_sends(self, track, value)
+                continue
+            if key in ('name', 'muted', 'routes', 'effects_enabled'):
                 start, end = self.mixer_spans()[track]
                 block = {e.id: e for e in self.events[start:end]}
                 if key == 'name':
@@ -420,12 +436,13 @@ class Project:
                         block[204].data = string(value)
                     else:
                         self.events.insert(start, Event(204, string(value)))
-                elif key == 'muted':
+                elif key in ('muted', 'effects_enabled'):
                     if type(value) is not bool:
-                        raise ValueError('muted must be a boolean')
+                        raise ValueError(f'{key} must be a boolean')
                     data = bytearray(block[236].data)
                     flags = struct.unpack_from('<I', data, 4)[0]
-                    struct.pack_into('<I', data, 4, flags & ~8 if value else flags | 8)
+                    bit, enabled = (8, not value) if key == 'muted' else (4, value)
+                    struct.pack_into('<I', data, 4, flags | bit if enabled else flags & ~bit)
                     block[236].data = bytes(data)
                 else:
                     if not isinstance(value, list) or any(type(x) is not int or not 0 <= x < len(self.mixer()) - 1 or x == track for x in value):
@@ -435,39 +452,23 @@ class Project:
                         block[235].data = data
                     else:
                         self.events.insert(end - 1, Event(235, data))
-                    selector = next(address for address, index in selectors.items() if index == track)
-                    params = next(e for e in self.events if e.id == 225)
+                    from .mixing import initial_values, send_address, set_initial
+                    old_values = initial_values(self)
                     for destination in value:
-                        ident = 64 + destination
-                        found = False
-                        records = bytearray(params.data)
-                        for offset in range(0, len(records), 12):
-                            addr = struct.unpack_from('<H', records, offset + 6)[0]
-                            if addr == selector and records[offset + 4] == ident:
-                                struct.pack_into('<i', records, offset + 8, 12800)
-                                found = True
-                        if not found:
-                            records += struct.pack('<4sBBHi', bytes(4), ident, 31, selector, 12800)
-                        params.data = bytes(records)
+                        address = send_address(self, track, destination)
+                        if address not in old_values:
+                            set_initial(self, address, 12800)
                 continue
             if key not in ('volume_raw', 'pan_raw'):
                 raise ValueError(f'Unsupported mixer change: {key}')
             low, high = (0, 16000) if key == 'volume_raw' else (-6400, 6400)
             if type(value) is not int or not low <= value <= high:
                 raise ValueError(f'{key} must be {low}..{high}')
-            found = False
-            for event in self.events:
-                if event.id != 225:
-                    continue
-                data = bytearray(event.data)
-                for offset in range(0, len(data), 12):
-                    encoded = struct.unpack_from('<H', data, offset + 6)[0]
-                    if selectors.get(encoded & 0xffc0) == track and data[offset + 4] == (192 if key == 'volume_raw' else 193):
-                        struct.pack_into('<i', data, offset + 8, value)
-                        found = True
-                event.data = bytes(data)
-            if not found:
+            from .mixing import initial_values, set_initial, track_address
+            address = track_address(self, track) | (192 if key == 'volume_raw' else 193)
+            if address not in initial_values(self):
                 raise ValueError('Mixer parameter is absent; refusing to invent a host event')
+            set_initial(self, address, value)
 
     def load_effect(self, track: int, slot: int, preset: Path | str | list[Event]):
         if type(slot) is not int or not 0 <= slot < 10:
@@ -496,6 +497,11 @@ class Project:
                             struct.pack_into('<II', data, 0, track, slot)
                             item.data = bytes(data)
                     self.events[position:i] = keep + plugin
+                    from .mixing import _erase_plugin_controls, slot_address, set_initial
+                    base = slot_address(self, track, slot)
+                    _erase_plugin_controls(self, base)
+                    set_initial(self, base, 1)
+                    set_initial(self, base | 1, 12800)
                     return
                 position = i + 1
         raise ValueError('Effect slot was not found in the mixer profile')
@@ -537,7 +543,8 @@ class Project:
         # This profile is backed by matching FL native-save and live API
         # values. Unknown plugin blobs remain opaque rather than guessed.
         if name != 'Emphasizer' or len(state.data) != 29 or state.data[:4] != struct.pack('<I', 2):
-            raise ValueError('No saved-parameter profile for this plugin state; use live plugin-params')
+            from .plugin_profiles import parameters
+            return parameters(self, track, slot)
         value = struct.unpack_from('<I', state.data, 8)[0] / 10000
         return {'track': track, 'slot': slot, 'plugin': name,
                 'params': [{'i': 1, 'name': 'Emphasis', 'v': value}],
@@ -598,4 +605,16 @@ def create_project(spec: dict, template: Path) -> Project:
     project._replace_value(67, struct.pack('<H', spec['patterns'][0]['number']))
     project._replace_value(9, b'\x01')
     project.set_playlist(spec['playlist'])
+    for mixer in spec.get('mixer', []):
+        project.set_mixer(mixer['track'], {k: v for k, v in mixer.items() if k != 'track'})
+    for effect in spec.get('effects', []):
+        project.load_effect(effect['track'], effect['slot'], effect['preset'])
+    from .mixing import apply_chains, validate_routing
+    apply_chains(project, spec.get('fx_chains', []))
+    from .sytrus import set_parameters
+    for synth in spec.get('sytrus', []):
+        set_parameters(project, synth['channel'], synth['params'])
+    from .plugin_profiles import apply_parameters
+    apply_parameters(project, spec.get('plugin_params', []))
+    validate_routing(project)
     return project

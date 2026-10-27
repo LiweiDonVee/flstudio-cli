@@ -56,6 +56,11 @@ class Composition(Spec):
     channels: list[Channel] = Field(min_length=1, max_length=128)
     patterns: list[Pattern] = Field(min_length=1)
     playlist: list[Clip] = Field(min_length=1)
+    mixer: list[dict] = Field(default_factory=list)
+    effects: list[dict] = Field(default_factory=list)
+    fx_chains: list[dict] = Field(default_factory=list)
+    sytrus: list[dict] = Field(default_factory=list)
+    plugin_params: list[dict] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def references(self):
@@ -110,12 +115,14 @@ def register(app, emit, json_option):
             return
         doc.save(output)
         after = Project.read(output)
-        if after.patterns() != doc.patterns() or after.channels() != doc.channels() or after.playlist() != doc.playlist():
+        if (after.patterns() != doc.patterns() or after.channels() != doc.channels()
+                or after.playlist() != doc.playlist() or after.mixer() != doc.mixer()):
             raise ValueError('Saved project readback differs from the requested composition')
         data.update(file_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
                     file_note_count=sum(len(p['notes']) for p in after.patterns().values()), live_applied=False)
         emit(Result(command='project build', status='artifact_ready',
-                    verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist'], data=data))
+                    verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist', 'saved_mixer'] +
+                    (['saved_host_overrides'] if spec.sytrus or spec.plugin_params else []), data=data))
 
     @project.command('edit')
     @click.option('--input', 'source', required=True, type=click.Path(path_type=Path))
@@ -126,7 +133,7 @@ def register(app, emit, json_option):
     def edit(source, request, output, dry_run):
         """Apply explicit note/channel/playlist/mixer changes to a new FLP copy."""
         changes = read_json(request)
-        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects', 'plugin_params'}:
+        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects', 'plugin_params', 'fx_chains', 'sytrus'}:
             raise ValueError('Unknown project edit section')
         doc = Project.read(source)
         if 'tempo_bpm' in changes:
@@ -145,10 +152,17 @@ def register(app, emit, json_option):
             doc.set_mixer(mixer['track'], {k: v for k, v in mixer.items() if k != 'track'})
         for effect in changes.get('effects', []):
             doc.load_effect(effect['track'], effect['slot'], effect['preset'])
-        for parameter in changes.get('plugin_params', []):
-            doc.set_plugin_parameter(parameter['track'], parameter['slot'], parameter['param'], parameter['value'])
+        from .mixing import apply_chains, validate_routing
+        apply_chains(doc, changes.get('fx_chains', []))
+        from .sytrus import set_parameters
+        sytrus_changes = [set_parameters(doc, synth['channel'], synth['params']) for synth in changes.get('sytrus', [])]
+        validate_routing(doc)
+        from .plugin_profiles import apply_parameters
+        apply_parameters(doc, changes.get('plugin_params', []))
         data = {'source': str(source.resolve()), 'output': str(output.resolve()),
                 'after': doc.inspect(), 'live_applied': False}
+        if sytrus_changes:
+            data['sytrus_changes'] = sytrus_changes
         if dry_run:
             data.update(applied_count=None, file_effects=[])
             emit(Result(command='project edit', status='planned', data=data))
@@ -161,22 +175,62 @@ def register(app, emit, json_option):
             raise ValueError('Channel or mixer readback mismatch after saving')
         emit(Result(command='project edit', status='artifact_ready',
                     verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist', 'saved_mixer'] +
-                    (['saved_plugin_param'] if changes.get('plugin_params') else []), data=data))
+                    (['saved_plugin_param'] if changes.get('plugin_params') else []) +
+                    (['saved_host_overrides'] if sytrus_changes else []), data=data))
 
     @app.group('plugin')
     @json_option
     def plugin_group():
         """Read supported saved effect parameters without touching live FL."""
 
+    @plugin_group.command('presets')
+    @click.option('--plugin', required=True, help='Installed plugin folder name, e.g. Sytrus.')
+    @click.option('--kind', type=click.Choice(['generator', 'effect']), default='generator')
+    @click.option('--search', '--query', default='')
+    @click.option('--fl-install', type=click.Path(path_type=Path), default=DEFAULT_INSTALL)
+    @click.option('--root', type=click.Path(path_type=Path), help='Optional user preset root containing plugin folders.')
+    @click.option('--offset', type=click.IntRange(0), default=0)
+    @click.option('--limit', type=click.IntRange(1, 200), default=40)
+    @json_option
+    def presets(plugin, kind, search, fl_install, root, offset, limit):
+        if Path(plugin).name != plugin or plugin in ('.', '..') or '/' in plugin or '\\' in plugin:
+            raise ValueError('Plugin must be a folder name, not a path')
+        directories = [fl_install / 'Data/Patches/Plugin presets' / ('Generators' if kind == 'generator' else 'Effects') / plugin]
+        if root:
+            directories.append(root / plugin)
+        found = {}
+        for directory in directories:
+            if directory.is_dir():
+                for path in sorted(directory.rglob('*.fst')):
+                    relative = path.relative_to(directory)
+                    if search.casefold() in str(relative).casefold():
+                        found[str(path.resolve())] = {'name': path.stem, 'category': str(relative.parent),
+                                                    'path': str(path.resolve())}
+        items = list(found.values())
+        emit(Result(command='plugin presets', status='verified', verified_scopes=['installed_preset_files'],
+                    data={'plugin': plugin, 'kind': kind, 'searched': [str(p) for p in directories], 'total': len(items),
+                          'offset': offset, 'next_offset': offset + limit if offset + limit < len(items) else None,
+                          'presets': items[offset:offset + limit]}))
+
     @plugin_group.command('params')
     @click.option('--project', required=True, type=click.Path(path_type=Path))
-    @click.option('--track', required=True, type=click.IntRange(0, 125))
-    @click.option('--slot', required=True, type=click.IntRange(0, 9))
+    @click.option('--track', type=click.IntRange(0, 125))
+    @click.option('--slot', type=click.IntRange(0, 9))
+    @click.option('--channel', type=click.IntRange(0, 4095))
     @json_option
-    def saved_params(project, track, slot):
+    def saved_params(project, track, slot, channel):
         doc = Project.read(project)
+        if channel is not None:
+            if track is not None or slot is not None:
+                raise ValueError('Choose channel or track+slot')
+            from .sytrus import parameters
+            data = parameters(doc, channel)
+        else:
+            if track is None or slot is None:
+                raise ValueError('Choose channel or track+slot')
+            data = doc.plugin_parameters(track, slot)
         emit(Result(command='plugin params', status='verified', verified_scopes=['saved_plugin_param'],
-                    data=doc.plugin_parameters(track, slot)))
+                    data=data))
 
     @plugin_group.command('verify')
     @click.option('--project', required=True, type=click.Path(path_type=Path))
