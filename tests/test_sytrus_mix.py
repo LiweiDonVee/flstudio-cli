@@ -26,6 +26,10 @@ def test_sytrus_to_bus_fx_chain_roundtrip(tmp_path):
     # their physical order in a saved file.
     at = next(i for i, e in enumerate(doc.events) if e.id == 64)
     doc.events.insert(at, Event(216, struct.pack('<IIi', 0, 0x7040800c, 32)))
+    # A plugin parameter whose low byte is 192 is not a mixer fader.
+    controls = next(e for e in doc.events if e.id == 225)
+    controls.data = struct.pack('<IIi', 0, 0x704080c0, 42) + controls.data
+    assert doc.mixer()[1]['volume_raw'] == 12800
     source = doc.save(tmp_path / 'source.flp')
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     reverb_state = doc._effect_state(1, 0)[1].data

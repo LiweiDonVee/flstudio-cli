@@ -54,7 +54,7 @@ def track_address(project: Project, track: int) -> int:
     if selector is None:
         raise ValueError('Mixer track has no known host control address')
     for address in initial_values(project):
-        if address & 255 == 192 and (address >> 16) & 0xffc0 == selector:
+        if address & 0xffff == 0x1fc0 and (address >> 16) & 0xffc0 == selector:
             return address & 0xffffff00
     raise ValueError('Mixer volume control is absent')
 
