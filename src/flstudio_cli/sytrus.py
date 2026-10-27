@@ -1,8 +1,6 @@
 """Sytrus host controls, without rewriting its compressed private preset state."""
 from __future__ import annotations
 
-import struct
-
 from .mixing import initial_values, set_initial
 
 
@@ -66,7 +64,7 @@ def _target(project, channel):
         raise ValueError('Sytrus preset state is missing')
     # Host controls belong to the installed Sytrus, not the preset's old
     # serialization version. FL upgrades its own factory presets on loading.
-    return {**info, 'state_version': struct.unpack_from('<I', state)[0]}
+    return {**info, 'state_prefix_hex': state[:4].hex()}
 
 
 def parameters(project, channel: int, search='') -> dict:
@@ -76,7 +74,7 @@ def parameters(project, channel: int, search='') -> dict:
     params = [{**entry, 'value_raw': values.get(base + entry['index']),
                'value_source': 'saved_host_override' if base + entry['index'] in values else 'opaque_preset'}
               for entry in catalog() if search.casefold() in entry['param'].casefold()]
-    return {'channel': channel, 'channel_iid': info['iid'], 'plugin': 'Sytrus', 'state_version': info['state_version'],
+    return {'channel': channel, 'channel_iid': info['iid'], 'plugin': 'Sytrus', 'state_prefix_hex': info['state_prefix_hex'],
             'params': params, 'units': 'Integer native host controls; live API uses normalized 0..1',
             'limitations': ['Null means the value is inside the unchanged preset, not zero',
                             'FM/RM matrix, custom harmonics and envelope point editing remain preset/GUI operations']}
