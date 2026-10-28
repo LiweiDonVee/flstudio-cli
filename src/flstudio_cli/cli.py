@@ -2,20 +2,16 @@
 
 from pathlib import Path
 import sys
+import json
+from typing import Any
 
 import click
-from pydantic import ValidationError
 
 from . import __version__
-from .capabilities import list_capabilities
-from .contracts import NotesReplaceRequest, Plan, Result
-from .environment import inspect_environment
-from .flp_probe import probe_flp
-from .json_output import JsonValueError, canonical_json, decode_json, encode_result, field_path
-from .planning import PlanningError, build_plan
 
 
-def _emit(result: Result) -> None:
+def _emit(result: Any) -> None:
+    from .json_output import encode_result
     payload = (encode_result(result) + "\n").encode("utf-8")
     if sys.stdout is None:  # Windows pythonw login startup has no console.
         return
@@ -49,6 +45,14 @@ class JsonGroup(JsonHelp, click.Group):
     def group(self, *args, **kwargs):
         kwargs.setdefault("cls", JsonGroup)
         return super().group(*args, **kwargs)
+
+    def parse_args(self, ctx, args):
+        # CliRunner and embedded callers invoke the Click app directly rather
+        # than through main(). Load the full tree at that boundary while the
+        # executable fast path can still skip it for saved-project inspection.
+        if not _REGISTERED:
+            _register_all()
+        return super().parse_args(ctx, args)
 
 
 def json_option(func):
@@ -257,7 +261,10 @@ def _finish(result):
 
 
 def main() -> None:
+    if _fast_path(sys.argv[1:]):
+        return
     try:
+        _register_all()
         # Click returns an explicit Exit code in non-standalone mode.
         # Preserve it for both console scripts and python -m.
         raise SystemExit(app(prog_name="flstudio", standalone_mode=False))
@@ -266,14 +273,14 @@ def main() -> None:
     except click.ClickException as exc:
         _emit(Result(command="cli", status="rejected", reason_code="invalid_arguments", data={"message": exc.format_message()}))
         raise SystemExit(2) from None
-    except ValidationError as exc:
+    except _validation_error_type() as exc:
         errors = [{"path": field_path(item["loc"]), "message": item["msg"], "type": item["type"]} for item in exc.errors()]
         _emit(Result(command="cli", status="rejected", reason_code="invalid_request", data={"errors": errors}))
         raise SystemExit(2) from None
-    except (JsonValueError, UnicodeError) as exc:
+    except (_json_value_error_type(), UnicodeError) as exc:
         _emit(Result(command="cli", status="rejected", reason_code="invalid_json", data={"message": str(exc), "path": getattr(exc, "path", "$")}))
         raise SystemExit(2) from None
-    except PlanningError as exc:
+    except _planning_error_type() as exc:
         _emit(Result(command="cli", status="rejected", reason_code="invalid_source_evidence", data={"message": str(exc)}))
         raise SystemExit(3) from None
     except ValueError as exc:
@@ -287,12 +294,134 @@ def main() -> None:
                      data={"error_type": type(exc).__name__, "message": str(exc)}))
         raise SystemExit(5) from None
 
+_REGISTERED = False
 
-from .workflows import register as register_workflows
-register_workflows(app, _emit, json_option)
-from .live import register as register_live
-register_live(app, _emit, json_option)
-from .midi_bridge import register as register_bridge
-register_bridge(app, _emit, json_option)
-from .sytrus import register as register_sytrus
-register_sytrus(app, _emit, json_option)
+
+def _register_all():
+    """Load the full command tree only when a non-fast-path command runs."""
+    global _REGISTERED
+    if _REGISTERED:
+        return
+    _REGISTERED = True
+    from .capabilities import list_capabilities
+    from .contracts import NotesReplaceRequest, Plan, Result
+    from .environment import inspect_environment
+    from .flp_probe import probe_flp
+    from .json_output import JsonValueError, canonical_json, decode_json, field_path
+    from .planning import PlanningError, build_plan
+    globals().update(locals())
+    from .workflows import register as register_workflows
+    register_workflows(app, _emit, json_option)
+    from .live import register as register_live
+    register_live(app, _emit, json_option)
+    from .midi_bridge import register as register_bridge
+    register_bridge(app, _emit, json_option)
+    from .sytrus import register as register_sytrus
+    register_sytrus(app, _emit, json_option)
+    from .automation import register as register_automation
+    register_automation(app, _emit, json_option)
+    from .timeline import register as register_playlist
+    register_playlist(app, _emit, json_option)
+    from .sessions import register as register_sessions
+    register_sessions(app, _emit, json_option)
+    from .piano_roll import register as register_piano_roll
+    register_piano_roll(app, _emit, json_option)
+    from .recording import register as register_recording
+    register_recording(app, _emit, json_option)
+    from .mixer_jobs import register as register_mixer_jobs
+    register_mixer_jobs(app, _emit, json_option)
+    from .scores import register as register_score_transforms
+    register_score_transforms(app.commands['notes'], _emit, json_option)
+
+
+def _validation_error_type():
+    from pydantic import ValidationError
+    return ValidationError
+
+
+def _json_value_error_type():
+    from .json_output import JsonValueError
+    return JsonValueError
+
+
+def _planning_error_type():
+    from .planning import PlanningError
+    return PlanningError
+
+
+def _fast_path(argv):
+    """Serve high-frequency saved-project inspection without loading the command tree."""
+    if argv == ['--version']:
+        print(json.dumps({'schema_version': 1, 'command': 'version', 'status': 'verified',
+                          'reason_code': None, 'verified_scopes': [], 'data': {'version': __version__}},
+                         ensure_ascii=False, separators=(',', ':')))
+        return True
+    if len(argv) < 4:
+        return False
+    if argv[:2] == ['project', 'snapshot']:
+        allowed = {'--input', '--focus', '--detail', '--limit', '--budget'}
+        if any(value.startswith('--') and value.split('=', 1)[0] not in allowed for value in argv[2:]):
+            return False
+        try:
+            source = None; detail = False; focus = []; limit = 32; budget = None
+            index = 2
+            while index < len(argv):
+                flag = argv[index]
+                if flag == '--input':
+                    index += 1; source = argv[index]
+                elif flag == '--focus':
+                    index += 1; focus.append(argv[index])
+                elif flag == '--detail':
+                    detail = True
+                elif flag == '--limit':
+                    index += 1; limit = int(argv[index])
+                elif flag == '--budget':
+                    index += 1; budget = int(argv[index])
+                else:
+                    return False
+                index += 1
+            if not source:
+                return False
+            from .flp import Project
+            from .snapshot import FOCUS, snapshot
+            selected = tuple(focus) if focus else FOCUS
+            data = snapshot(Project.read(source), detail=detail, limit=limit, focus=selected, budget=budget)
+            print(json.dumps({'schema_version': 1, 'command': 'project snapshot', 'status': 'verified',
+                              'reason_code': None, 'verified_scopes': ['saved_project_overview'], 'data': data},
+                             ensure_ascii=False, allow_nan=False, separators=(',', ':')))
+            return True
+        except Exception:
+            return False
+    if argv[:2] != ['project', 'inspect']:
+        return False
+    allowed = {'--input', '--summary', '--section'}
+    if any(value.startswith('--') and value.split('=', 1)[0] not in allowed for value in argv[2:]):
+        return False
+    try:
+        source = None; summary = False; sections = []
+        index = 2
+        while index < len(argv):
+            flag = argv[index]
+            if flag == '--input':
+                index += 1
+                source = argv[index]
+            elif flag == '--summary':
+                summary = True
+            elif flag == '--section':
+                index += 1
+                sections.append(argv[index])
+            else:
+                return False
+            index += 1
+        if not source or not sections:
+            return False
+        from .flp import Project
+        data = Project.read(source).inspect(not summary, False, sections)
+        print(json.dumps({'schema_version': 1, 'command': 'project inspect', 'status': 'verified',
+                          'reason_code': None,
+                          'verified_scopes': ['saved_' + {'patterns': 'notes'}.get(name, name) for name in sections],
+                          'data': data}, ensure_ascii=False, allow_nan=False, separators=(',', ':')))
+        return True
+    except Exception:
+        # Unsupported fast-path arguments fall back to Click's normal JSON error envelope.
+        return False

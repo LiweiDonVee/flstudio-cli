@@ -1,10 +1,14 @@
 # FL Studio CLI
 
 Compose and edit saved FL Studio projects, render with the real FL engine,
-and optionally control an open session through a configured local MIDI bridge.
+and control an addressed FL session through a standalone controller.
 
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
+
+Version 1.0.0 is the stable fullstack release. New Automation,
+Playlist, session and VST3 workflows are described in [fullstack work](docs/fullstack.md).
+Its supported scopes and remaining GUI collaboration boundaries are documented in [release 1.0.0](docs/release-1.0.0.md).
 
 ## Install and make a beat
 
@@ -17,6 +21,8 @@ uv tool install --editable . --python 3.12
 flstudio doctor
 flstudio project build --request examples/beat.json --output my-beat.flp
 flstudio project inspect --input my-beat.flp --summary
+flstudio project validate --input my-beat.flp
+flstudio project snapshot --input my-beat.flp --focus channels --focus mixer --budget 12000
 flstudio render wav --project my-beat.flp --output my-beat.wav
 ```
 
@@ -32,8 +38,12 @@ flstudio notes replace --project song.flp --pattern-number 1 --channel-index 0 -
 flstudio project edit --input song.flp --request changes.json --output mixed.flp
 ```
 
-The file backend supports explicit pattern/channel notes, fixed-layout Playlist
-pattern clips, sample paths, installed generator/effect `.fst` presets,
+`project validate` is a read-only preflight for the saved envelope, channel/note references, Mixer routes, Automation links and encode round-trip. It returns a failed result before an Agent hands an invalid artifact to FL.
+`project snapshot` emits stable counts and bounded sections for long-running Agent context. Use repeated `--focus` values, `--detail`, `--limit` and `--budget` to expand only what the current step needs.
+
+
+The file backend supports explicit pattern/channel notes, pattern/audio/automation
+Playlist clips with per-record tails, sample paths, installed generator/effect `.fst` presets,
 channel levels and routing, and Mixer levels, names, mute and bus routing.
 Every edit creates a new file; existing outputs and source files are never overwritten.
 
@@ -55,7 +65,7 @@ wet/dry settings. Saved parameter profiles also cover Parametric EQ 2,
 Reeverb 2, Soft Clipper and Limiter controls.
 
 [Sytrus, mixer and FX request reference](docs/sytrus-mixing.md) ·
-[0.5 native audio evidence](docs/release-0.5.md)
+[1.0.0 release evidence](docs/release-1.0.0.md) · [0.5 native audio evidence](docs/release-0.5.md)
 
 ## Parameter state and actual audio response
 
@@ -72,7 +82,26 @@ This dedicated controlled-input verifier covers Emphasizer v2 **Emphasis**.
 Sytrus and the other native effect profiles use saved host-control overrides;
 their practical audio checks are documented in the 0.5 report.
 
-## Optional live control
+## Live control and private sessions
+
+Install the standalone FL controller and reload it once in FL:
+
+```powershell
+flstudio bridge install-controller
+flstudio live status
+flstudio live query --command cli_capabilities
+flstudio session start --project my-beat.flp --output-dir work-session
+flstudio live --session work-session/session.json status
+flstudio session save --session work-session/session.json --output saved.flp
+flstudio session stop --session work-session/session.json
+```
+
+An existing controller binding is retained. A fresh machine must select the
+installed controller in FL's MIDI settings once. The standalone controller
+uses addressed file RPC; neither an MCP server nor the MIDI relay is required.
+Private sessions run their own FL process and leave the user's editor alone.
+
+The older MIDI transport remains optional:
 
 Install the MIDI extra to run the CLI's own local relay:
 
@@ -114,8 +143,14 @@ does not contact the live bridge.
 
 File edits do not change the editor's unsaved memory. The collaboration path
 is **GUI save → CLI new copy → GUI open the copy**.
-Arbitrary automation curves, unknown variable-layout Playlist clips and custom
-third-party plugin controls are outside the current implementation.
+Saved Automation curves and host-exposed third-party parameters are implemented.
+Exact in-place live Piano Roll editing, recording jobs and dynamic Mixer
+expansion have owned-worker paths with native readback. First-use recording and
+popup menus require the Agent to inspect and address the private window.
+Arbitrary plugin GUI controls remain human-required when no host parameter or
+reliable canvas postcondition exists. Unknown Playlist layouts are rejected;
+audio fade handles have a native GUI path while no generic offline fade-tail
+writer is supplied.
 
 Four workflow regressions are maintained; native application and independent
 comparison evidence is documented separately. Development checks require a

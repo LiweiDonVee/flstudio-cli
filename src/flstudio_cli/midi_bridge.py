@@ -21,6 +21,7 @@ from .json_output import canonical_json, decode_json
 
 BACKEND = 'flstudio_cli_midi'
 PREFIX = b'\x7dMCP'
+SESSION_PREFIX = b'\x7dFCL'
 
 
 def rpc(port, request):
@@ -71,6 +72,7 @@ class MidiRelay:
         self.pending = {}
         self.last_heartbeat = None
         self.controller = None
+        self.controllers = {}
         self.heartbeat = threading.Event()
 
         def resolve(pattern, names):
@@ -109,21 +111,40 @@ class MidiRelay:
         if message.type != 'sysex':
             return
         packet = bytes(message.data)
-        if len(packet) < 13 or packet[:4] != PREFIX:
+        if len(packet) < 13 or packet[:4] not in (PREFIX, SESSION_PREFIX):
             return
+        encoded = packet[13:]
+        if packet[:4] == SESSION_PREFIX and packet[4] == 5:
+            if len(packet) < 15:
+                return
+            identifier, part, count = packet[5:13].decode('ascii'), packet[13], packet[14]
+            if not 0 <= part < count <= 127:
+                return
+            with self.pending_lock:
+                slot = self.pending.get(identifier)
+                if slot is None:
+                    return
+                pieces = slot.setdefault('pieces', {})
+                pieces[part] = packet[15:]
+                if len(pieces) != count:
+                    return
+                encoded = b''.join(pieces[i] for i in range(count))
         try:
-            payload = json.loads(base64.b64decode(packet[13:], validate=True).decode('utf-8'))
+            payload = json.loads(base64.b64decode(encoded, validate=True).decode('utf-8'))
         except (ValueError, UnicodeError):
             return
         if packet[4] == 3:
-            self.last_heartbeat = time.monotonic()
-            self.controller = payload
-            self.heartbeat.set()
-        elif packet[4] == 2:
+            if packet[:4] == SESSION_PREFIX:
+                self.controllers[payload['instance']] = {**payload, 'received_at': time.monotonic()}
+            else:
+                self.last_heartbeat = time.monotonic()
+                self.controller = payload
+                self.heartbeat.set()
+        elif packet[4] in (2, 5):
             identifier = packet[5:13].decode('ascii')
             with self.pending_lock:
                 slot = self.pending.get(identifier)
-                if slot is not None:
+                if slot is not None and (slot.get('instance') is None or payload.get('instance') == slot['instance']):
                     slot['reply'] = payload
                     slot['ready'].set()
 
@@ -133,22 +154,39 @@ class MidiRelay:
                 'alive': age is not None and age <= 3, 'heartbeat_age': age,
                 'port_to_fl': self.port_to_fl, 'port_from_fl': self.port_from_fl,
                 'alternate_return_port': self.return_input.name if self.return_input else None,
-                'alternate_return_error': self.return_input_error, 'controller': self.controller}
+                'alternate_return_error': self.return_input_error, 'controller': self.controller,
+                'sessions': [{**value, 'heartbeat_age': max(0, time.monotonic() - value['received_at'])}
+                             for value in self.controllers.values() if time.monotonic() - value['received_at'] < 30]}
 
-    def call(self, command, params, timeout):
+    def call(self, command, params, timeout, instance=None, owner_marker=None):
         with self.request_lock:
             if self.last_heartbeat is None:
                 self.heartbeat.wait(3)
-            if not self.health()['alive']:
+            observed = self.controllers.get(instance) if instance else None
+            alive = (observed is not None and time.monotonic() - observed['received_at'] <= 3) if instance else self.health()['alive']
+            if not alive:
                 return {'ok': False, 'error': 'FL controller heartbeat is missing or stale', 'code': 'fl_not_connected'}
             identifier = secrets.token_hex(4)
             request = {'v': 2, 'cmd': command, 'params': params or {}}
-            packet = PREFIX + b'\x01' + identifier.encode('ascii') + base64.b64encode(canonical_json(request).encode('utf-8'))
-            slot = {'ready': threading.Event(), 'reply': None}
+            if instance:
+                request.update(instance=instance, owner_marker=owner_marker)
+            encoded = base64.b64encode(canonical_json(request).encode('utf-8'))
+            packet = (SESSION_PREFIX if instance else PREFIX) + b'\x01' + identifier.encode('ascii') + encoded
+            if not instance and len(packet) > 1000:
+                return {'ok': False, 'error': 'Request exceeds safe MIDI budget; use smaller batches or parameter indices'}
+            if instance and len(encoded) > 720 * 127:
+                return {'ok': False, 'error': 'Request exceeds 68 KiB; select a smaller operation'}
+            slot = {'ready': threading.Event(), 'reply': None, 'instance': instance}
             with self.pending_lock:
                 self.pending[identifier] = slot
             try:
-                self.output.send(self.mido.Message('sysex', data=packet))
+                if instance and len(encoded) > 720:
+                    count = (len(encoded) + 719) // 720
+                    for index in range(count):
+                        fragment = SESSION_PREFIX + b'\x04' + identifier.encode('ascii') + bytes([index, count]) + encoded[index * 720:(index + 1) * 720]
+                        self.output.send(self.mido.Message('sysex', data=fragment))
+                else:
+                    self.output.send(self.mido.Message('sysex', data=packet))
                 if not slot['ready'].wait(timeout):
                     return {'ok': False, 'error': f'FL did not answer {command!r} in {timeout}s', 'code': 'fl_timeout'}
                 reply = slot['reply']
@@ -170,7 +208,8 @@ def serve(port, midi_out, midi_in):
                 if request.get('op') == 'health':
                     result = relay.health()
                 elif request.get('op') == 'call':
-                    result = relay.call(request['cmd'], request.get('params'), min(120, max(.1, float(request.get('timeout', 5)))))
+                    result = relay.call(request['cmd'], request.get('params'), min(120, max(.1, float(request.get('timeout', 5)))),
+                                        request.get('instance'), request.get('owner_marker'))
                 elif request.get('op') == 'shutdown':
                     result = {'ok': True, 'backend': BACKEND}
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
@@ -197,6 +236,35 @@ def register(app, emit, json_option):
     def bridge_group():
         """Run the CLI's own MIDI relay without an MCP server or daemon."""
 
+    @bridge_group.command('install-controller')
+    @click.option('--controller-dir', type=click.Path(path_type=Path))
+    @click.option('--dry-run', is_flag=True)
+    @json_option
+    def install_controller(controller_dir, dry_run):
+        """Install the standalone controller; preserve an existing FL binding."""
+        import shutil
+        hardware = Path.home() / 'Documents/Image-Line/FL Studio/Settings/Hardware'
+        legacy = hardware / 'FLStudioMCP'
+        folder = (controller_dir or (legacy if (legacy / 'device_FLStudioMCP.py').is_file() else hardware / 'FLStudioCLI')).resolve()
+        compatible = (folder / 'device_FLStudioMCP.py').is_file()
+        script = folder / ('device_FLStudioMCP.py' if compatible else 'device_FLStudioCLI.py')
+        helper = folder / 'flstudio_cli_extension.py'
+        data = {'controller': str(script), 'extension': str(helper), 'binding_preserved': compatible,
+                'needs_reload': True, 'controller_type': 'FLStudioMCP' if compatible else 'FLStudioCLI'}
+        if dry_run:
+            data['file_effects'] = []
+            emit(Result(command='bridge install-controller', status='planned', data=data)); return
+        folder.mkdir(parents=True, exist_ok=True)
+        for path in (script, helper):
+            backup = path.with_suffix(path.suffix + '.pre-standalone.bak')
+            if path.is_file() and not backup.exists(): shutil.copy2(path, backup)
+        source = Path(__file__).with_name('controller_base.py').read_text(encoding='utf-8')
+        if compatible: source = source.replace('# name=FLStudioCLI', '# name=FLStudioMCP', 1)
+        source = source.replace('_CLI_CONTROLLER_DIR = None', '_CLI_CONTROLLER_DIR = ' + repr(str(folder)))
+        helper.write_bytes(Path(__file__).with_name('controller_extension.py').read_bytes())
+        script.write_text(source, encoding='utf-8')
+        emit(Result(command='bridge install-controller', status='artifact_ready', verified_scopes=['controller_files'], data=data))
+
     @bridge_group.command('install-controller-extension')
     @click.option('--controller-dir', type=click.Path(path_type=Path),
                   default=Path.home() / 'Documents/Image-Line/FL Studio/Settings/Hardware/FLStudioMCP')
@@ -211,12 +279,13 @@ def register(app, emit, json_option):
         source = script.read_text(encoding='utf-8-sig')
         marker = '# FLSTUDIO_CLI_EXTENSION'
         helper = controller_dir / 'flstudio_cli_extension.py'
-        if marker not in source:
+        if marker not in source and '_CLI_FILE_RPC = True' not in source:
             backup = script.with_suffix('.py.pre-cli-extension.bak')
             if not backup.exists():
                 shutil.copy2(script, backup)
             source += ('\n\n' + marker + '\nfrom flstudio_cli_extension import install as _install_cli_extension\n'
-                       '_install_cli_extension(_HANDLERS)\n')
+                       '_install_cli_extension(_HANDLERS, globals())\n')
+        source = source.replace('_install_cli_extension(_HANDLERS)\n', '_install_cli_extension(_HANDLERS, globals())\n')
         helper.write_bytes(Path(__file__).with_name('controller_extension.py').read_bytes())
         script.write_text(source, encoding='utf-8')
         emit(Result(command='bridge install-controller-extension', status='artifact_ready',

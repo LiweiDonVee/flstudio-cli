@@ -11,8 +11,6 @@ import hashlib
 import math
 import struct
 
-from .contracts import NoteInput
-
 NOTE = struct.Struct('<IHHIHH8B')
 HEADER = struct.Struct('<4sIhHH4sI')
 
@@ -35,6 +33,23 @@ def string(value: str) -> bytes:
     return (value + '\0').encode('utf-16le')
 
 
+def wrapped_plugin(state):
+    """Read the wrapper's sized UTF-8 identity records, leaving state opaque."""
+    if state is None or len(state) < 4 or int.from_bytes(state[:4], 'little') not in (8, 10, 12):
+        return None
+    names, at = {}, 4
+    while at + 12 <= len(state):
+        tag, size = struct.unpack_from('<IQ', state, at)
+        at += 12
+        if size > len(state) - at: break
+        if tag in (54, 55, 56):
+            names[{54: 'name', 55: 'path', 56: 'vendor'}[tag]] = state[at:at + size].decode('utf-8', 'replace').rstrip('\0')
+        elif tag == 52 and size == 16:
+            names['class_id_hex'] = state[at:at + size].hex()
+        at += size
+    return names if names.get('name') else None
+
+
 def preset_events(path: Path | str) -> list[Event]:
     preset = Project.read(path)
     legacy = int(preset.version.split('.')[0]) < 11
@@ -50,12 +65,16 @@ def preset_events(path: Path | str) -> list[Event]:
     return result
 
 
-@dataclass
+@dataclass(slots=True)
 class Event:
     id: int
     data: bytes
+    original: bytes | None = None
+    original_size: int = 0
 
     def encode(self) -> bytes:
+        if self.original is not None and self.original[0] == self.id and len(self.data) == self.original_size:
+            return self.original + self.data
         prefix = bytes([self.id])
         if self.id >= 192:
             n = len(self.data)
@@ -76,20 +95,44 @@ class Project:
         if magic != b'FLhd' or size != 6 or data_magic != b'FLdt' or length != len(blob) - 22:
             raise ValueError('Invalid FLhd/FLdt envelope')
         self.events: list[Event] = []
+        self._channel_cache = None
+        failures = []
+        for size172 in (1, 4):
+            try:
+                events, version = self._parse_events(blob, size172)
+                if self.format == 0 and sum(e.id == 64 for e in events) != self.channel_count:
+                    raise ValueError('Channel identities do not match the FLhd count')
+            except (ValueError, UnicodeError) as error:
+                failures.append(str(error))
+                continue
+            self.events, self.version = events, version
+            self.text_encoding = 'utf-16le' if version != 'unknown' and tuple(int(p) for p in version.split('.')[:2]) >= (11, 5) else 'latin-1'
+            self.event_size_overrides = {172: size172} if any(e.id == 172 for e in events) else {}
+            break
+        else:
+            raise ValueError('No consistent FLP event layout: ' + '; '.join(failures))
+
+    @staticmethod
+    def _parse_events(blob, size172):
+        events = []
+        append, event_type = events.append, Event
+        end = len(blob)
         pos = 22
-        self.version = 'unknown'
-        while pos < len(blob):
+        version = 'unknown'
+        while pos < end:
+            event_start = pos
             eid = blob[pos]
             pos += 1
             if eid < 192:
                 size = 1 if eid < 64 else 2 if eid < 128 else 4
-                # FL26 changed this otherwise undocumented event from four to three bytes.
-                if eid == 172 and self.version.startswith('26.'):
-                    size = 3
+                # One-byte event in actual FL25/26 files, despite its numeric
+                # range. Select the layout by whole-stream/channel consistency.
+                if eid == 172:
+                    size = size172
             else:
                 size = 0
                 for shift in range(0, 35, 7):
-                    if pos >= len(blob):
+                    if pos >= end:
                         raise ValueError('Truncated FLP variable length')
                     byte = blob[pos]
                     pos += 1
@@ -98,13 +141,15 @@ class Project:
                         break
                 else:
                     raise ValueError('Invalid FLP variable length')
-            if pos + size > len(blob):
+            if pos + size > end:
                 raise ValueError(f'Truncated FLP event {eid}')
+            head = blob[event_start:pos]
             data = blob[pos:pos + size]
             pos += size
             if eid == 199:
-                self.version = data.rstrip(b'\0').decode('ascii')
-            self.events.append(Event(eid, data))
+                version = data.rstrip(b'\0').decode('ascii')
+            append(event_type(eid, data, head, size))
+        return events, version
 
     @classmethod
     def read(cls, path: Path | str) -> Project:
@@ -134,31 +179,44 @@ class Project:
                 if start is not None:
                     spans.append((start, index))
                 start = index
-            elif start is not None and event.id in (65, 99):
+            elif start is not None and event.id in (65, 99, 100, 225, 233, 238):
                 spans.append((start, index))
                 start = None
         if start is not None:
-            raise ValueError('Unsupported channel section without a closing pattern/arrangement boundary')
+            spans.append((start, len(self.events)))
         return spans
 
+    def _text(self, data):
+        return data.decode(self.text_encoding).rstrip('\0')
+
+    def _string(self, value):
+        return (value + '\0').encode(self.text_encoding)
+
     def channels(self) -> list[dict]:
+        groups = [{e.id: e.data for e in self.events[start:end]} for start, end in self.channel_spans()]
+        fields = (64, 21, 203, 192, 201, 196, 22, 104, 128, 219, 213)
+        routes = [next((data for eid, data in reversed(group.items()) if eid in (22, 104)), b'\0') for group in groups]
+        signature = tuple((*[group.get(field) for field in fields], route) for group, route in zip(groups, routes))
+        if self._channel_cache is not None and self._channel_cache[0] == signature:
+            return [dict(channel) for channel in self._channel_cache[1]]
         result = []
-        for index, (start, end) in enumerate(self.channel_spans()):
-            events = self.events[start:end]
-            values = {e.id: e.data for e in events}
+        for index, values in enumerate(groups):
             iid = int.from_bytes(values[64], 'little')
             levels = values.get(219)
             result.append({
-                'index': index, 'iid': iid, 'name': text(values.get(203, values.get(192, b'\0\0'))),
-                'type': values.get(21, b'\0')[0], 'plugin': text(values.get(201, b'\0\0')) or 'Sampler',
-                'sample_path': text(values[196]) if 196 in values else None,
-                'mixer_track': int.from_bytes(values.get(22, b'\0'), 'little'),
+                'index': index, 'iid': iid, 'name': self._text(values.get(203, values.get(192, values.get(201, b'\0\0')))),
+                'type': values.get(21, b'\0')[0], 'plugin': self._text(values.get(201, b'\0\0')) or 'Sampler',
+                'sample_path': self._text(values[196]) if 196 in values else None,
+                'mixer_track': int.from_bytes(routes[index], 'little'),
+                'color': int.from_bytes(values[128], 'little') if 128 in values else None,
                 'volume_raw': struct.unpack_from('<I', levels, 4)[0] if levels and len(levels) >= 8 else None,
                 'pan_raw': struct.unpack_from('<i', levels)[0] - 6400 if levels and len(levels) >= 4 else None,
                 'plugin_state_sha256': hashlib.sha256(values[213]).hexdigest() if 213 in values else None,
+                'wrapped_plugin': wrapped_plugin(values.get(213)) if self._text(values.get(201, b'\0\0')) == 'Fruity Wrapper' else None,
             })
         if len(result) != self.channel_count:
             raise ValueError('FLP channel count disagrees with the event section')
+        self._channel_cache = signature, [dict(channel) for channel in result]
         return result
 
     def patterns(self) -> dict[int, dict]:
@@ -170,7 +228,11 @@ class Project:
                 current = int.from_bytes(event.data, 'little')
                 patterns.setdefault(current, {'number': current, 'name': f'Pattern {current}', 'notes': []})
             elif current is not None and event.id == 193:
-                patterns[current]['name'] = text(event.data)
+                patterns[current]['name'] = self._text(event.data)
+            elif current is not None and event.id in (150, 164, 26):
+                name = {150: 'color', 164: 'length_tick', 26: 'looped'}[event.id]
+                value = int.from_bytes(event.data, 'little')
+                patterns[current][name] = bool(value) if event.id == 26 else value
             elif current is not None and event.id == 224:
                 if len(event.data) % NOTE.size:
                     raise ValueError(f'Unsupported note record size in pattern {current}')
@@ -179,7 +241,7 @@ class Project:
                     patterns[current]['notes'].append({
                         'channel_index': iid_to_index.get(iid), 'channel_iid': iid,
                         'key': key, 'start_tick': pos, 'length_tick': length, 'velocity': velocity,
-                        'flags': flags, 'group': group, 'fine_pitch': fine, 'release': release,
+                        'flags': flags, 'group': group, 'fine_pitch': fine, 'reserved_raw': reserved, 'release': release,
                         'midi_channel': midi, 'pan': pan, 'mod_x': modx, 'mod_y': mody,
                     })
             elif event.id in (64, 99):
@@ -195,42 +257,36 @@ class Project:
         return 60 if parts >= (21, 0) else 32
 
     def playlist(self) -> list[dict]:
-        result = []
-        arrangement = None
-        size = self.playlist_record_size()
-        for event in self.events:
-            if event.id == 99:
-                arrangement = int.from_bytes(event.data, 'little')
-            if event.id != 233:
-                continue
-            if len(event.data) % size:
-                raise ValueError('Edited/variable-length Playlist records require another backend')
-            for offset in range(0, len(event.data), size):
-                record = event.data[offset:offset + size]
-                pos, base, item, length, reverse, group, tag, flags = struct.unpack_from('<IHHIHHHH', record)
-                if base != 20480 or reverse > 499:
-                    raise ValueError('Unsupported Playlist record profile')
-                result.append({'arrangement': arrangement, 'track': 500 - reverse,
-                               'pattern_number': item - base if item >= base else None,
-                               'channel_iid': item if item < base else None,
-                               'start_tick': pos, 'length_tick': length, 'flags': flags,
-                               'record_bytes': size})
-        return result
+        from .timeline import read_playlist
+        return read_playlist(self)
 
     @property
     def tempo(self) -> float:
-        return int.from_bytes(next(e.data for e in self.events if e.id == 156), 'little') / 1000
+        values = {e.id: e.data for e in self.events if e.id in (156, 66, 93)}
+        if 156 in values: return int.from_bytes(values[156], 'little') / 1000
+        return int.from_bytes(values.get(66, b'x\0'), 'little') + int.from_bytes(values.get(93, b'\0\0'), 'little') / 1000
 
-    def inspect(self, include_notes=True) -> dict:
-        patterns = list(self.patterns().values())
-        for pattern in patterns:
-            pattern['note_count'] = len(pattern['notes'])
-            if not include_notes:
-                pattern.pop('notes')
-        return {'path': str(self.path) if self.path else None, 'producer_version': self.version,
-                'ppq': self.ppq, 'tempo_bpm': self.tempo, 'channels': self.channels(),
-                'patterns': patterns, 'playlist': self.playlist(), 'mixer': self.mixer(),
+    def inspect(self, include_notes=True, include_settings=False, sections=None) -> dict:
+        from .automation import read_all
+        from .fields import metadata, arrangements, pattern_controllers, channel_settings
+        from .timing import markers
+        result = {'path': str(self.path) if self.path else None, 'producer_version': self.version,
+                'ppq': self.ppq, 'tempo_bpm': self.tempo,
                 'event_count': len(self.events), 'source_sha256': hashlib.sha256(self.source).hexdigest()}
+        readers = {'channels': self.channels, 'patterns': lambda: list(self.patterns().values()),
+                   'playlist': self.playlist, 'mixer': self.mixer, 'automation': lambda: read_all(self),
+                   'metadata': lambda: metadata(self), 'arrangements': lambda: arrangements(self),
+                   'controllers': lambda: pattern_controllers(self), 'markers': lambda: markers(self),
+                   'channel_settings': lambda: [channel_settings(self, i) for i in range(len(self.channel_spans()))]}
+        selected = set(sections) if sections else set(readers) - {'channel_settings'}
+        if include_settings: selected.add('channel_settings')
+        if selected - readers.keys(): raise ValueError('Unknown inspection section')
+        for name, reader in readers.items():
+            if name in selected: result[name] = reader()
+        for pattern in result.get('patterns', []):
+            pattern['note_count'] = len(pattern['notes'])
+            if not include_notes: pattern.pop('notes')
+        return result
 
     def _replace_value(self, eid, data):
         for event in self.events:
@@ -240,20 +296,25 @@ class Project:
         raise ValueError(f'Required FLP event {eid} not present')
 
     def set_tempo(self, bpm):
-        if isinstance(bpm, bool) or not isinstance(bpm, (int, float)) or not math.isfinite(bpm) or not 10 <= bpm <= 522:
-            raise ValueError('Tempo must be finite, 10..522 BPM')
-        self._replace_value(156, struct.pack('<I', round(bpm * 1000)))
+        if isinstance(bpm, bool) or not isinstance(bpm, (int, float)) or not math.isfinite(bpm) or not 10 <= bpm <= 999:
+            raise ValueError('Tempo must be finite, 10..999 BPM')
+        matches = [e for e in self.events if e.id == 156]
+        if not matches:
+            self.events.append(Event(156, struct.pack('<I', round(bpm * 1000))))
+        else:
+            for event in matches: event.data = struct.pack('<I', round(bpm * 1000))
 
     def replace_notes(self, pattern: int, channel_index: int, notes: list[dict], append=False):
+        from .note_values import validate
         if type(pattern) is not int or not 1 <= pattern <= 999:
             raise ValueError('Pattern number must be 1..999')
         channels = self.channels()
         if type(channel_index) is not int or not 0 <= channel_index < len(channels):
             raise ValueError('Channel index is not in this saved project')
         iid = channels[channel_index]['iid']
-        validated = [NoteInput.model_validate(n) for n in notes]
-        additions = b''.join(NOTE.pack(n.start_tick, 0x4000, iid, n.length_tick, n.key, 0,
-                                       120, 0, 64, 0, 64, n.velocity, 128, 128) for n in validated)
+        validated = [validate(n) for n in notes]
+        additions = b''.join(NOTE.pack(n['start_tick'], n['flags'], iid, n['length_tick'], n['key'], n['group'],
+                                       n['fine_pitch'], n['reserved_raw'], n['release'], n['midi_channel'], n['pan'], n['velocity'], n['mod_x'], n['mod_y']) for n in validated)
         current = None
         for event in self.events:
             if event.id == 65:
@@ -279,29 +340,53 @@ class Project:
             elif event.id in (64, 99):
                 current = None
             elif current == number and event.id == 193:
-                event.data = string(name)
+                event.data = self._string(name)
                 return
         where = next(i for i, e in enumerate(self.events) if e.id == 99)
-        self.events[where:where] = [Event(65, struct.pack('<H', number)), Event(193, string(name))]
+        self.events[where:where] = [Event(65, struct.pack('<H', number)), Event(193, self._string(name))]
 
-    def set_playlist(self, clips: list[dict]):
-        size = self.playlist_record_size()
+    def set_playlist(self, clips: list[dict], arrangement=0):
+        from .timeline import write_playlist
+        write_playlist(self, clips, arrangement)
+
+    def _set_fresh_playlist(self, clips: list[dict], event, record_size=None):
+        size = record_size or self.playlist_record_size()
         records = []
         patterns = self.patterns()
         for uid, clip in enumerate(clips, 1):
-            pat, track, pos, length = (clip[k] for k in ('pattern_number', 'track', 'start_tick', 'length_tick'))
-            if any(type(x) is not int for x in (pat, track, pos, length)) or pat not in patterns or not 1 <= track <= 500 or pos < 0 or length <= 0:
+            pat = clip.get('pattern_number')
+            channel = clip.get('channel_index')
+            track, pos, length = (clip[k] for k in ('track', 'start_tick', 'length_tick'))
+            if any(type(x) is not int for x in (track, pos, length)) or not 1 <= track <= 500 or pos < 0 or length <= 0:
                 raise ValueError('Playlist clip must reference an existing pattern and valid track/ticks')
-            record = struct.pack('<IHHIHHHH4sII', pos, 20480, 20480 + pat, length, 500 - track,
-                                 0, 120, 64, bytes([64, 100, 128, 128]), 0xffffffff, 0xffffffff)
+            if (pat is None) == (channel is None):
+                raise ValueError('Choose pattern_number or channel_index')
+            if pat is not None:
+                if type(pat) is not int or pat not in patterns:
+                    raise ValueError('Playlist pattern is absent')
+                item = 20480 + pat
+            else:
+                channels = self.channels()
+                if type(channel) is not int or not 0 <= channel < len(channels) or channels[channel]['type'] not in (4, 5):
+                    raise ValueError('Channel clip must reference an Audio Clip or Automation channel')
+                item = channels[channel]['iid']
+            record = struct.pack('<IHHIHHHH4sII', pos, 20480, item, length, 500 - track,
+                                 clip.get('group', 0), 120, 64, bytes([64, 100, 128, 128]), 0xffffffff, 0xffffffff)
             if size >= 80:
                 record += struct.pack('<I', uid) + bytes(28) + struct.pack('<d', 1.0) + bytes(8)
                 if size == 88:
                     record += bytes(8)
             elif size == 60:
                 record += struct.pack('<I', uid) + bytes(24)
+            data = bytearray(record)
+            kind = 'pattern' if channel is None else 'automation' if channels[channel]['type'] == 5 else 'audio'
+            if kind == 'audio' and size >= 80:
+                struct.pack_into('<f', data, 52, 1.0)
+            from .timeline import initialize_window
+            initialize_window(self, data, clip, kind)
+            record = bytes(data)
             records.append(record)
-        self._replace_value(233, b''.join(records))
+        event.data = b''.join(sorted(records, key=lambda r: struct.unpack_from('<I', r)[0]))
 
     def set_channel(self, index: int, changes: dict):
         spans = self.channel_spans()
@@ -310,8 +395,20 @@ class Project:
         start, end = spans[index]
         mapping = {e.id: e for e in self.events[start:end]}
         for key, value in changes.items():
-            if key == 'name':
-                mapping[203].data = string(value)
+            if key == 'settings':
+                from .fields import set_channel_settings
+                set_channel_settings(self, index, value)
+            elif key == 'kind':
+                if value not in ('sampler', 'audio') or mapping[21].data[0] not in (0, 4):
+                    raise ValueError('Sample channel kind must be sampler or audio')
+                mapping[21].data = bytes([4 if value == 'audio' else 0])
+            elif key == 'name':
+                mapping[203].data = self._string(value)
+            elif key == 'color':
+                from .fields import patch
+                data = patch(bytes(4), (0, 'I'), value)
+                if 128 in mapping: mapping[128].data = data
+                else: self.events.insert(start + 1, Event(128, data))
             elif key == 'muted':
                 if type(value) is not bool:
                     raise ValueError('muted must be a boolean')
@@ -320,14 +417,19 @@ class Project:
                 sample = Path(value).resolve()
                 if not sample.is_file():
                     raise ValueError(f'Sample does not exist: {sample}')
-                mapping[196].data = string(str(sample))
+                mapping[196].data = self._string(str(sample))
             elif key == 'mixer_track':
-                if type(value) is not int or not 0 <= value <= 125:
-                    raise ValueError('Mixer route must be 0..125')
-                if 22 in mapping:
+                if type(value) is not int or not 0 <= value < len(self.mixer_spans()) - 1:
+                    raise ValueError('Mixer route must identify an existing ordinary saved track; add the track first')
+                if 104 in mapping:
+                    mapping[104].data = struct.pack('<H', value)
+                    if 22 in mapping:
+                        if value < 256: mapping[22].data = bytes([value])
+                        else: self.events[start:end] = [e for e in self.events[start:end] if e.id != 22]
+                elif 22 in mapping and value < 256:
                     mapping[22].data = bytes([value])
                 else:
-                    self.events.insert(end, Event(22, bytes([value])))
+                    self.events.insert(end, Event(104, struct.pack('<H', value)))
             elif key in ('volume_raw', 'pan_raw'):
                 low, high = (0, 12800) if key == 'volume_raw' else (-6400, 6400)
                 if type(value) is not int or not low <= value <= high:
@@ -375,15 +477,16 @@ class Project:
             plugins, plugin = [], None
             for e in block:
                 if e.id == 201:
-                    plugin = {'name': text(e.data), 'slot': None, 'state_sha256': None}
+                    plugin = {'name': self._text(e.data), 'slot': None, 'state_sha256': None, 'wrapped_plugin': None}
                     plugins.append(plugin)
                 elif plugin is not None and e.id == 213:
                     plugin['state_sha256'] = hashlib.sha256(e.data).hexdigest()
+                    if plugin['name'] == 'Fruity Wrapper': plugin['wrapped_plugin'] = wrapped_plugin(e.data)
                 elif plugin is not None and e.id == 98:
                     plugin['slot'] = int.from_bytes(e.data, 'little')
                     plugin = None
             default_name = 'Master' if not tracks else 'Current' if len(tracks) == len(spans) - 1 else f'Insert {len(tracks)}'
-            tracks.append({'index': len(tracks), 'name': text(data[204]) if 204 in data else default_name,
+            tracks.append({'index': len(tracks), 'name': self._text(data[204]) if 204 in data else default_name,
                            'plugins': plugins, 'routes': [i for i, value in enumerate(data.get(235, b'')) if value]})
         selectors = self._mixer_selectors()
         for event in self.events:
@@ -424,6 +527,11 @@ class Project:
         if 'sends' in changes:
             ordered.append(('sends', changes['sends']))
         for key, value in ordered:
+            if key in ('polarity_reversed', 'channels_swapped', 'threaded_processing', 'solo',
+                       'hardware_input_raw', 'hardware_output_raw', 'eq'):
+                from .mixing import set_track_field
+                set_track_field(self, track, key, value)
+                continue
             if key == 'sends':
                 from .mixing import set_sends
                 set_sends(self, track, value)
@@ -433,9 +541,9 @@ class Project:
                 block = {e.id: e for e in self.events[start:end]}
                 if key == 'name':
                     if 204 in block:
-                        block[204].data = string(value)
+                        block[204].data = self._string(value)
                     else:
-                        self.events.insert(start, Event(204, string(value)))
+                        self.events.insert(start, Event(204, self._string(value)))
                 elif key in ('muted', 'effects_enabled'):
                     if type(value) is not bool:
                         raise ValueError(f'{key} must be a boolean')
@@ -470,12 +578,15 @@ class Project:
                 raise ValueError('Mixer parameter is absent; refusing to invent a host event')
             set_initial(self, address, value)
 
-    def load_effect(self, track: int, slot: int, preset: Path | str | list[Event]):
+    def load_effect(self, track: int, slot: int, preset: Path | str | list[Event], *, links_prepared=False):
         if type(slot) is not int or not 0 <= slot < 10:
             raise ValueError('Effect slot must be 0..9')
         spans = self.mixer_spans()
         if type(track) is not int or not 0 <= track < len(spans) - 1:
             raise ValueError('Mixer track is absent')
+        if not links_prepared:
+            from .mixing import _chain_links, slot_address
+            _chain_links(self, set(), {}, {slot_address(self, track, slot) >> 16})
         start, end = spans[track]
         position = start
         for i in range(start, end):
@@ -527,7 +638,7 @@ class Project:
         name, state = None, None
         for event in self.events[start:end]:
             if event.id == 201:
-                name, state = text(event.data), None
+                    name, state = self._text(event.data), None
             elif event.id == 213:
                 state = event
             elif event.id == 98:
@@ -570,8 +681,8 @@ def create_project(spec: dict, template: Path) -> Project:
     if not source:
         raise ValueError('Template must contain a Sampler channel')
     channels = spec['channels']
-    if not 1 <= len(channels) <= 128:
-        raise ValueError('A project needs 1..128 sample channels')
+    if not 1 <= len(channels) <= 4096:
+        raise ValueError('A project needs 1..4096 channels')
     if project.patterns() or project.playlist():
         raise ValueError('Build template must be empty; use edit for existing projects')
     replacement = []
@@ -587,6 +698,10 @@ def create_project(spec: dict, template: Path) -> Project:
                 data = string(channel['name'])
             elif event.id == 196:
                 data = string(str(sample)) if sample else string('')
+            elif event.id == 21 and channel.get('kind') == 'audio':
+                if not sample:
+                    raise ValueError('Audio Clip channels require a sample')
+                data = b'\x04'
             replacement.append(Event(event.id, data))
     project.events[spans[0][0]:spans[-1][1]] = replacement
     project.channel_count = len(channels)
@@ -602,7 +717,7 @@ def create_project(spec: dict, template: Path) -> Project:
         project.name_pattern(number, pattern.get('name', f'Pattern {number}'))
     # New compositions open on an actual pattern and render their Playlist,
     # rather than inheriting the factory template's empty Pattern-mode export.
-    project._replace_value(67, struct.pack('<H', spec['patterns'][0]['number']))
+    project._replace_value(67, struct.pack('<H', spec['patterns'][0]['number'] if spec['patterns'] else 1))
     project._replace_value(9, b'\x01')
     project.set_playlist(spec['playlist'])
     for mixer in spec.get('mixer', []):
@@ -616,5 +731,8 @@ def create_project(spec: dict, template: Path) -> Project:
         set_parameters(project, synth['channel'], synth['params'])
     from .plugin_profiles import apply_parameters
     apply_parameters(project, spec.get('plugin_params', []))
+    from .automation import create_curve
+    for curve in spec.get('automation', []):
+        create_curve(project, curve)
     validate_routing(project)
     return project

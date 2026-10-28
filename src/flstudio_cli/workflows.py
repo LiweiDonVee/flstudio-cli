@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import hashlib
+from typing import Literal
 
 import click
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -22,7 +23,8 @@ class Channel(Spec):
     name: str = Field(min_length=1)
     sample_path: str | None = None
     plugin_preset: str | None = None
-    mixer_track: int = Field(default=0, ge=0, le=125)
+    kind: Literal['sampler', 'audio', 'generator'] | None = None
+    mixer_track: int = Field(default=0, ge=0, le=65535)
     volume_raw: int = Field(default=10000, ge=0, le=12800)
     pan_raw: int = Field(default=0, ge=-6400, le=6400)
 
@@ -30,6 +32,9 @@ class Channel(Spec):
     def source(self):
         if bool(self.sample_path) == bool(self.plugin_preset):
             raise ValueError('Specify exactly one sample_path or plugin_preset')
+        if ((self.sample_path and self.kind == 'generator') or
+                (self.plugin_preset and self.kind not in (None, 'generator'))):
+            raise ValueError('Channel kind must agree with its sample or generator preset')
         return self
 
 
@@ -45,22 +50,39 @@ class Pattern(Spec):
 
 
 class Clip(Spec):
-    pattern_number: int = Field(ge=1, le=999)
+    pattern_number: int | None = Field(default=None, ge=1, le=999)
+    channel_index: int | None = Field(default=None, ge=0)
     track: int = Field(ge=1, le=500)
     start_tick: int = Field(ge=0)
     length_tick: int = Field(gt=0)
+    group: int = Field(default=0, ge=0, le=65535)
+    source_start_tick: int | None = Field(default=None, ge=0)
+    source_start_ms: float | int | None = Field(default=None, ge=0)
+    source_end_ms: float | int | None = Field(default=None, gt=0)
+    gain: float | int | None = Field(default=None, ge=0)
+
+    @model_validator(mode='after')
+    def kind(self):
+        if (self.pattern_number is None) == (self.channel_index is None):
+            raise ValueError('Choose exactly one pattern_number or channel_index')
+        if (self.source_start_ms is None) != (self.source_end_ms is None):
+            raise ValueError('Audio cuts require both source_start_ms and source_end_ms')
+        if self.source_start_tick is not None and self.source_start_ms is not None:
+            raise ValueError('Choose a source window in ticks or milliseconds')
+        return self
 
 
 class Composition(Spec):
-    tempo_bpm: float | int = Field(default=130, ge=10, le=522)
-    channels: list[Channel] = Field(min_length=1, max_length=128)
-    patterns: list[Pattern] = Field(min_length=1)
+    tempo_bpm: float | int = Field(default=130, ge=10, le=999)
+    channels: list[Channel] = Field(min_length=1, max_length=4096)
+    patterns: list[Pattern] = Field(default_factory=list)
     playlist: list[Clip] = Field(min_length=1)
     mixer: list[dict] = Field(default_factory=list)
     effects: list[dict] = Field(default_factory=list)
     fx_chains: list[dict] = Field(default_factory=list)
     sytrus: list[dict] = Field(default_factory=list)
     plugin_params: list[dict] = Field(default_factory=list)
+    automation: list[dict] = Field(default_factory=list)
 
     @model_validator(mode='after')
     def references(self):
@@ -71,7 +93,7 @@ class Composition(Spec):
             indices = [score.channel_index for score in pattern.scores]
             if len(indices) != len(set(indices)) or any(index >= len(self.channels) for index in indices):
                 raise ValueError('Scores must reference unique, existing channels')
-        if any(clip.pattern_number not in numbers for clip in self.playlist):
+        if any(clip.pattern_number is not None and clip.pattern_number not in numbers for clip in self.playlist):
             raise ValueError('Playlist references an undefined pattern')
         return self
 
@@ -86,15 +108,32 @@ def register(app, emit, json_option):
     def project():
         """Inspect, create, and edit explicit saved FL projects."""
 
+    from .project_diff import register as register_diff
+    register_diff(project, emit, json_option)
+    from .fields import register as register_fields
+    register_fields(project, emit, json_option)
+    from .timing import register as register_timing
+    register_timing(project, emit, json_option)
+    from .merge import register as register_merge
+    register_merge(project, emit, json_option)
+    from .validation import register as register_validation
+    register_validation(project, emit, json_option)
+    from .snapshot import register as register_snapshot
+    register_snapshot(project, emit, json_option)
+
     @project.command('inspect')
     @click.option('--input', 'source', required=True, type=click.Path(path_type=Path))
     @click.option('--summary', is_flag=True, help='Omit individual note records.')
+    @click.option('--settings', is_flag=True, help='Include sampler, envelope, polyphony and stretching fields.')
+    @click.option('--section', 'sections', multiple=True, type=click.Choice(['channels', 'patterns', 'playlist', 'mixer', 'automation', 'metadata', 'arrangements', 'controllers', 'markers', 'channel_settings']), help='Decode only these sections; repeat to combine them.')
     @json_option
-    def inspect(source, summary):
+    def inspect(source, summary, settings, sections):
         doc = Project.read(source)
+        data = doc.inspect(not summary, settings, sections)
         emit(Result(command='project inspect', status='verified',
-                    verified_scopes=['saved_channels', 'saved_notes', 'saved_playlist', 'saved_mixer'],
-                    data=doc.inspect(not summary)))
+                    verified_scopes=['saved_' + {'patterns': 'notes'}.get(name, name)
+                                     for name in data if name in ('channels', 'patterns', 'playlist', 'mixer', 'automation', 'metadata', 'arrangements', 'controllers', 'markers', 'channel_settings')],
+                    data=data))
 
     @project.command('build')
     @click.option('--request', required=True, type=click.Path(path_type=Path))
@@ -133,19 +172,34 @@ def register(app, emit, json_option):
     def edit(source, request, output, dry_run):
         """Apply explicit note/channel/playlist/mixer changes to a new FLP copy."""
         changes = read_json(request)
-        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects', 'plugin_params', 'fx_chains', 'sytrus'}:
+        if not isinstance(changes, dict) or set(changes) - {'tempo_bpm', 'channels', 'scores', 'patterns', 'playlist', 'mixer', 'effects', 'plugin_params', 'plugin_settings', 'fx_chains', 'sytrus', 'playlist_edits', 'automation', 'metadata', 'arrangements', 'controllers', 'transforms', 'markers'}:
             raise ValueError('Unknown project edit section')
         doc = Project.read(source)
+        from .fields import set_metadata, set_arrangement, set_controllers
+        set_metadata(doc, changes.get('metadata', {}))
         if 'tempo_bpm' in changes:
             doc.set_tempo(changes['tempo_bpm'])
         for channel in changes.get('channels', []):
-            doc.set_channel(channel['index'], {k: v for k, v in channel.items() if k != 'index'})
+            if 'clone_from' in channel:
+                from .entities import clone_channel
+                if 'index' in channel: raise ValueError('A channel clone uses clone_from instead of index')
+                index = clone_channel(doc, channel['clone_from'], channel.get('name'), channel.get('copy_scores', False))
+                doc.set_channel(index, {k: v for k, v in channel.items() if k not in ('clone_from', 'name', 'copy_scores')})
+            else:
+                doc.set_channel(channel['index'], {k: v for k, v in channel.items() if k != 'index'})
         for score in changes.get('scores', []):
             if score.get('mode', 'replace') not in ('append', 'replace'):
                 raise ValueError('Score mode must be replace or append')
             doc.replace_notes(score['pattern_number'], score['channel_index'], score['notes'], score.get('mode') == 'append')
         for pattern in changes.get('patterns', []):
-            doc.name_pattern(pattern['number'], pattern['name'])
+            from .entities import edit_pattern
+            edit_pattern(doc, pattern)
+        from .scores import transform
+        for operation in changes.get('transforms', []): transform(doc, operation)
+        for arrangement in changes.get('arrangements', []): set_arrangement(doc, arrangement)
+        for controllers in changes.get('controllers', []): set_controllers(doc, controllers)
+        from .timing import set_markers
+        for marker_spec in changes.get('markers', []): set_markers(doc, marker_spec)
         if 'playlist' in changes:
             doc.set_playlist([Clip.model_validate(c).model_dump() for c in changes['playlist']])
         for mixer in changes.get('mixer', []):
@@ -159,29 +213,65 @@ def register(app, emit, json_option):
         validate_routing(doc)
         from .plugin_profiles import apply_parameters
         apply_parameters(doc, changes.get('plugin_params', []))
+        from .plugin_state import edit as edit_plugin, describe as describe_plugin
+        plugin_settings = [edit_plugin(doc, spec) for spec in changes.get('plugin_settings', [])]
+        from .automation import create_curve, write_curve
+        for curve in changes.get('automation', []):
+            if 'channel' in curve:
+                if set(curve) != {'channel', 'points'}:
+                    raise ValueError('Editing an existing automation requires channel and points')
+                write_curve(doc, curve['channel'], curve['points'])
+            else:
+                create_curve(doc, curve)
+        from .timeline import patch_playlist
+        patch_playlist(doc, changes.get('playlist_edits', []))
         data = {'source': str(source.resolve()), 'output': str(output.resolve()),
-                'after': doc.inspect(), 'live_applied': False}
+                'after': doc.inspect(include_settings=any('settings' in c for c in changes.get('channels', []))), 'live_applied': False}
         if sytrus_changes:
             data['sytrus_changes'] = sytrus_changes
+        if plugin_settings:
+            data['plugin_settings'] = plugin_settings
         if dry_run:
             data.update(applied_count=None, file_effects=[])
             emit(Result(command='project edit', status='planned', data=data))
             return
         doc.save(output)
         readback = Project.read(output)
-        if readback.inspect()['patterns'] != data['after']['patterns']:
-            raise ValueError('Note readback mismatch after saving')
-        if readback.channels() != doc.channels() or readback.mixer() != doc.mixer():
-            raise ValueError('Channel or mixer readback mismatch after saving')
+        observed = readback.inspect(include_settings='channel_settings' in data['after'])
+        for item in plugin_settings:
+            target = {k: item['after'][k] for k in ('channel', 'track', 'slot') if k in item['after']}
+            if describe_plugin(readback, target) != item['after']: raise ValueError('Plugin settings readback mismatch')
+        for section in ('patterns', 'channels', 'mixer', 'playlist', 'automation', 'metadata', 'arrangements', 'controllers', 'channel_settings', 'markers'):
+            if section not in data['after']: continue
+            if observed[section] != data['after'][section]:
+                raise ValueError(f'{section} readback mismatch after saving')
         emit(Result(command='project edit', status='artifact_ready',
                     verified_scopes=['saved_notes', 'saved_channels', 'saved_playlist', 'saved_mixer'] +
                     (['saved_plugin_param'] if changes.get('plugin_params') else []) +
-                    (['saved_host_overrides'] if sytrus_changes else []), data=data))
+                    (['saved_plugin_settings'] if plugin_settings else []) +
+                    (['saved_host_overrides'] if sytrus_changes else []) +
+                    (['saved_automation'] if changes.get('automation') else []), data=data))
 
     @app.group('plugin')
     @json_option
     def plugin_group():
         """Read supported saved effect parameters without touching live FL."""
+
+    from .vst3 import register as register_vst3
+    register_vst3(plugin_group, emit, json_option)
+
+    @plugin_group.command('settings')
+    @click.option('--project', required=True, type=click.Path(path_type=Path))
+    @click.option('--channel', type=click.IntRange(0, 4095))
+    @click.option('--track', type=click.IntRange(0, 499))
+    @click.option('--slot', type=click.IntRange(0, 9))
+    @json_option
+    def saved_settings(project, channel, track, slot):
+        """Read Wrapper flags, VST settings, small native states and Notebook pages."""
+        from .plugin_state import describe
+        target = {k: v for k, v in (('channel', channel), ('track', track), ('slot', slot)) if v is not None}
+        emit(Result(command='plugin settings', status='verified', verified_scopes=['saved_plugin_settings'],
+                    data=describe(Project.read(project), target)))
 
     @plugin_group.command('presets')
     @click.option('--plugin', required=True, help='Installed plugin folder name, e.g. Sytrus.')

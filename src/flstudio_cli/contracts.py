@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 
 
 class Contract(BaseModel):
@@ -34,11 +34,12 @@ class Result(Contract):
         return self
 
 
-class NoteInput(Contract):
-    key: int = Field(ge=0, le=127)
-    start_tick: int = Field(ge=0, le=4294967295)
-    length_tick: int = Field(gt=0, le=4294967295)
-    velocity: int = Field(ge=1, le=127)
+from .note_values import FIELDS as NOTE_FIELDS
+
+NoteInput = create_model('NoteInput', __base__=Contract, **{
+    name: (int, Field(default=default, ge=low, le=high))
+    for name, (default, low, high) in NOTE_FIELDS.items()
+})
 
 
 class NotesReplaceRequest(Contract):

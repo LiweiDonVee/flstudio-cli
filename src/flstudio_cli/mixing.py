@@ -8,6 +8,10 @@ from .flp import Event, Project
 
 
 PLUGIN_EVENTS = {201, 203, 212, 213, 155, 128, 41}
+TRACK_FLAGS = {'polarity_reversed': (1, True), 'channels_swapped': (2, True),
+               'threaded_processing': (16, False), 'solo': (0x1000, True)}
+EQ_CONTROLS = {'gain_raw': (208, -1800, 1800), 'frequency_raw': (216, 0, 65536),
+               'bandwidth_raw': (224, 0, 65536)}
 
 
 def initial_values(project: Project) -> dict[int, int]:
@@ -86,6 +90,13 @@ def describe_mixer(project: Project, tracks: list[dict]):
                       if e.id == 236 and len(e.data) >= 8), None)
         track['muted'] = not bool(flags & 8) if flags is not None else None
         track['effects_enabled'] = bool(flags & 4) if flags is not None else None
+        for name, (mask, positive) in TRACK_FLAGS.items():
+            track[name] = bool(flags & mask) == positive if flags is not None else None
+        block = {e.id: e for e in project.events[start:end]}
+        for name, eid in (('hardware_output_raw', 147), ('hardware_input_raw', 154)):
+            track[name] = struct.unpack_from('<i', block[eid].data)[0] if eid in block else None
+        track['eq'] = [{'band': band, **{name: values.get(base | (ident + band))
+                        for name, (ident, _, _) in EQ_CONTROLS.items()}} for band in range(3)]
         track['sends'] = [{'to': destination, 'level': values.get(send_address(project, track['index'], destination), 12800) / 12800}
                           for destination in track['routes']]
         for plugin in track['plugins']:
@@ -93,6 +104,34 @@ def describe_mixer(project: Project, tracks: list[dict]):
             plugin['enabled'] = bool(values.get(address, 1))
             plugin['wet'] = values.get(address | 1, 12800) / 12800
     return tracks
+
+
+def set_track_field(project, track, key, value):
+    start, end = project.mixer_spans()[track]
+    block = {e.id: e for e in project.events[start:end]}
+    if key in TRACK_FLAGS:
+        if type(value) is not bool: raise ValueError(f'{key} must be a boolean')
+        data = bytearray(block[236].data); flags = struct.unpack_from('<I', data, 4)[0]
+        mask, positive = TRACK_FLAGS[key]
+        struct.pack_into('<I', data, 4, flags | mask if value == positive else flags & ~mask)
+        block[236].data = bytes(data)
+    elif key in ('hardware_input_raw', 'hardware_output_raw'):
+        if type(value) is not int or not -0x80000000 <= value <= 0x7fffffff: raise ValueError('Hardware selector requires a signed 32-bit integer')
+        eid = 154 if key == 'hardware_input_raw' else 147
+        if eid not in block: raise ValueError('Hardware selector is absent in this track')
+        block[eid].data = struct.pack('<i', value)
+    elif key == 'eq':
+        if not isinstance(value, list): raise ValueError('EQ requires an array of explicit band edits')
+        base, values = track_address(project, track), initial_values(project)
+        for band in value:
+            if not isinstance(band, dict) or set(band) - {'band', *EQ_CONTROLS} or type(band.get('band')) is not int or not 0 <= band['band'] < 3: raise ValueError('EQ band must be 0..2 with known raw fields')
+            for name, raw in band.items():
+                if name == 'band': continue
+                ident, low, high = EQ_CONTROLS[name]; address = base | (ident + band['band'])
+                if type(raw) is not int or not low <= raw <= high: raise ValueError(f'{name} must be {low}..{high}')
+                if address not in values: raise ValueError('EQ host control is absent')
+                set_initial(project, address, raw)
+    else: raise ValueError('Unknown mixer field')
 
 
 def set_sends(project: Project, track: int, sends: list[dict]):
@@ -138,17 +177,81 @@ def _erase_plugin_controls(project: Project, base: int):
                                           and struct.unpack_from('<H', event.data, o + 4)[0] >= 0x8000))
 
 
+def _fx_control(address):
+    return address & 0xffff >= 0x8000 or address & 0xffff in (0x1f00, 0x1f01)
+
+
+def _slot_controls(project, source, destination, target):
+    records = []
+    for event in project.events:
+        if event.id not in (216, 225): continue
+        for at in range(0, len(event.data), 12):
+            address = struct.unpack_from('<I', event.data, at + 4)[0]
+            if address >> 16 != source >> 16 or not _fx_control(address): continue
+            row = bytearray(event.data[at:at + 12])
+            struct.pack_into('<I', row, 4, (destination & 0xffff0000) | (address & 0xffff))
+            records.append((event.id, row))
+    for name, offset, default in (('enabled', 0, 1), ('wet', 1, 12800)):
+        address = destination | offset
+        matches = [row for _, row in records if struct.unpack_from('<I', row, 4)[0] == address]
+        if name in target:
+            value = int(target[name]) if name == 'enabled' else round(target[name] * 12800)
+            for row in matches: struct.pack_into('<i', row, 8, value)
+        else: value = default
+        if not matches: records.append((225, bytearray(struct.pack('<IIi', 0, address, value))))
+    return records
+
+
+def _replace_slot_controls(project, base, records):
+    for event in project.events:
+        if event.id in (216, 225):
+            event.data = b''.join(event.data[at:at + 12] for at in range(0, len(event.data), 12)
+                if not ((address := struct.unpack_from('<I', event.data, at + 4)[0]) >> 16 == base >> 16 and _fx_control(address)))
+    for eid, row in records:
+        event = next((e for e in project.events if e.id == eid), None)
+        if event is None:
+            event = Event(eid, b'')
+            at = next((i for i, e in enumerate(project.events) if e.id == 64), len(project.events))
+            project.events.insert(at, event)
+        event.data += bytes(row)
+
+
+def _chain_links(project, edited_tracks, copies, destinations):
+    affected = {slot_address(project, track, plugin['slot']) >> 16
+                for track in edited_tracks for plugin in project.mixer()[track]['plugins']}
+    affected.update(destinations)
+    def mapped(address):
+        group = address >> 16
+        if group not in affected or not _fx_control(address): return address
+        options = copies.get(group, [])
+        if group in options: return address
+        if len(options) != 1:
+            raise ValueError('A linked effect is removed or copied to ambiguous destinations; retain its slot or unlink it first')
+        return options[0] << 16 | (address & 0xffff)
+    changes = []
+    for event in project.events:
+        if event.id == 227 and event.data:
+            if len(event.data) != 20: raise ValueError('Unsupported controller-link record layout')
+            for at in (0, 8):
+                address = struct.unpack_from('<I', event.data, at)[0]
+                updated = mapped(address)
+                if address != updated: changes.append((event, at, updated))
+        elif event.id == 223:
+            if len(event.data) % 12: raise ValueError('Unsupported pattern-controller record layout')
+            for at in range(4, len(event.data), 12):
+                address = struct.unpack_from('<I', event.data, at)[0]
+                updated = mapped(address)
+                if address != updated: changes.append((event, at, updated))
+    return changes
+
+
 def apply_chains(project: Project, chains: list[dict]) -> None:
     if not isinstance(chains, list):
         raise ValueError('fx_chains must be an array')
     if not chains:
         return
-    # Slot references inside automation/controllers need their own adapter.
-    if any(e.id in (227, 234) and e.data for e in project.events):
-        raise ValueError('FX chain replacement with controller/automation links is not supported; keep the linked chain in GUI')
     snapshot = Project(project.encode())
-    old_values = initial_values(snapshot)
-    tracks_seen, prepared = set(), []
+    tracks_seen, prepared, copies = set(), [], {}
     for chain in chains:
         if not isinstance(chain, dict) or set(chain) != {'track', 'slots'} or not isinstance(chain['slots'], list):
             raise ValueError('Each fx_chains entry requires track and complete slots array')
@@ -167,27 +270,26 @@ def apply_chains(project: Project, chains: list[dict]) -> None:
             if slot in slots_seen:
                 raise ValueError('Duplicate target effect slot')
             slots_seen.add(slot)
-            controls = []
+            if ('enabled' in target and type(target['enabled']) is not bool or 'wet' in target and
+                (type(target['wet']) not in (int, float) or not math.isfinite(target['wet']) or not 0 <= target['wet'] <= 1)):
+                raise ValueError('Slot enabled must be boolean and wet must be finite 0..1')
             if 'copy_from' in target:
                 source = target['copy_from']
                 if not isinstance(source, dict) or set(source) != {'track', 'slot'}:
                     raise ValueError('copy_from requires track and slot')
                 events = snapshot.effect_events(source['track'], source['slot'])
                 old_base = slot_address(snapshot, source['track'], source['slot'])
-                enabled = bool(old_values.get(old_base, 1))
-                wet = old_values.get(old_base | 1, 12800) / 12800
-                for address, value in old_values.items():
-                    if address >> 16 == old_base >> 16 and address & 0xffff >= 0x8000:
-                        controls.append((225, (base & 0xffff0000) | (address & 0xffff), value))
+                controls = _slot_controls(snapshot, old_base, base, target)
+                copies.setdefault(old_base >> 16, []).append(base >> 16)
             else:
                 from .flp import preset_events
                 events = preset_events(target['preset'])
-                enabled, wet = True, 1.0
-            enabled, wet = target.get('enabled', enabled), target.get('wet', wet)
-            if type(enabled) is not bool or type(wet) not in (int, float) or not math.isfinite(wet) or not 0 <= wet <= 1:
-                raise ValueError('Slot enabled must be boolean and wet must be finite 0..1')
-            targets.append((slot, events, enabled, wet, controls))
+                controls = [(225, struct.pack('<IIi', 0, base, int(target.get('enabled', True)))),
+                            (225, struct.pack('<IIi', 0, base | 1, round(target.get('wet', 1.0) * 12800)))]
+            targets.append((slot, events, controls))
         prepared.append((track, targets))
+    link_changes = _chain_links(project, tracks_seen, copies,
+        {slot_address(project, track, slot) >> 16 for track, targets in prepared for slot, _, _ in targets})
     # Resolve every source before removing anything, so moves/swaps across
     # multiple tracks retain their exact state regardless of request order.
     for track, targets in prepared:
@@ -195,16 +297,15 @@ def apply_chains(project: Project, chains: list[dict]) -> None:
             start, end = _slot_span(project, track, slot)
             project.events[start:end] = [e for e in project.events[start:end] if e.id not in PLUGIN_EVENTS]
             base = slot_address(project, track, slot)
-            _erase_plugin_controls(project, base)
-            set_initial(project, base, 1)
-            set_initial(project, base | 1, 12800)
-        for slot, events, enabled, wet, controls in targets:
-            project.load_effect(track, slot, events)
+            _replace_slot_controls(project, base, [(225, struct.pack('<IIi', 0, base, 1)),
+                                                 (225, struct.pack('<IIi', 0, base | 1, 12800))])
+        for slot, events, controls in targets:
+            project.load_effect(track, slot, events, links_prepared=True)
             base = slot_address(project, track, slot)
-            set_initial(project, base, int(enabled))
-            set_initial(project, base | 1, round(wet * 12800))
-            for eid, address, value in controls:
-                set_initial(project, address, value, event_id=eid)
+            _replace_slot_controls(project, base, controls)
+    # Slot edits retain the actual controller/link Event objects.
+    for event, offset, address in link_changes:
+        data = bytearray(event.data); struct.pack_into('<I', data, offset, address); event.data = bytes(data)
 
 
 def validate_routing(project: Project):

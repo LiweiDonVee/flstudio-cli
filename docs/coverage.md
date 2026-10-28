@@ -1,6 +1,8 @@
 # 功能覆盖与验收矩阵
 
-当前0.2已实现保存工程的通道/采样/预设音源、音符、Pattern、固定布局Playlist、Mixer与效果器编辑，以及真实FL批渲染；见 [当前用法](quickstart-0.2.md) 与 [实际验证](release-0.2.md)。下方长期矩阵保留后续研究，不能将外部证据直接转成本项目已实现声明。
+当前未发布分支的支持与缺口以 [fullstack.md](fullstack.md) 和 `flstudio capabilities` 为准；
+包括有链接 Automation、逐条变长 Playlist、第三方宿主参数、独立 FL 会话、工程字段和语义合并。
+下面保留早期版本的验收及研究记录，不代表当前状态，也不将外部源码当作本机实测。
 
 | 新 CLI 当前操作 | implemented / availability | 本项目验证范围 | 限制 |
 | --- | --- | --- | --- |

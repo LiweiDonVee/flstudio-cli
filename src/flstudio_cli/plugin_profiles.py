@@ -15,7 +15,17 @@ def profile(name: str, state: bytes) -> list[dict]:
             add(f'band{band}.gain', band - 1, -1800, 1800, 'centidB')
             add(f'band{band}.frequency', band + 6, 0, 65536)
             add(f'band{band}.width', band + 13, 0, 65536)
+            add(f'band{band}.type', band + 20, 0, 7, 'enum')
+            add(f'band{band}.order', band + 27, -3, 3, 'enum')
         add('main_level', 35, -1800, 1800, 'centidB')
+    elif name == 'Fruity Reeverb 2' and len(state) == 66 and struct.unpack_from('<I', state)[0] == 10001:
+        for param, index, low, high in (
+            ('low_cut', 0, 19, 3000), ('high_cut', 1, 5, 221), ('predelay', 2, 0, 384),
+            ('room_size', 3, 1, 100), ('diffusion', 4, 0, 100), ('decay', 5, 1, 200),
+            ('high_damping', 6, 5, 221), ('bass', 7, 20, 300), ('crossover', 8, 25, 2000),
+            ('stereo', 9, -64, 64), ('dry', 10, 0, 160), ('early_reflections', 11, 0, 160),
+            ('wet', 12, 0, 160), ('mod_speed', 13, 0, 2048), ('mod_depth', 14, 0, 2048)):
+            add(param, index, low, high)
     elif name == 'Fruity Reeverb 2' and len(state) == 53:
         for param, index, low, high in (
             ('high_cut', 0, 0, 100), ('low_cut', 1, 0, 100), ('predelay', 2, 0, 1000),
@@ -30,6 +40,17 @@ def profile(name: str, state: bytes) -> list[dict]:
     elif name == 'Fruity Limiter' and len(state) == 161 and struct.unpack_from('<I', state)[0] == 5:
         add('gain', 0, 0, 10000)
         add('ceiling', 2, 0, 1000)
+    elif name == 'Fruity Limiter' and len(state) == 169 and struct.unpack_from('<I', state)[0] == 7:
+        for param, index, low, high in (
+            ('gain', 0, 0, 2000), ('saturation_threshold', 1, 0, 1000), ('ceiling', 2, 0, 2000),
+            ('limiter_attack', 3, 0, 10000), ('limiter_attack_curve', 4, 1, 8),
+            ('limiter_release', 5, 0, 10000), ('limiter_release_curve', 6, 1, 8),
+            ('peak_window', 7, 0, 10000), ('comp_threshold', 8, 0, 1000),
+            ('comp_ratio', 9, -1000, 1000), ('comp_knee', 10, -1000, 1000),
+            ('comp_attack', 11, 0, 10000), ('comp_release', 12, 0, 10000),
+            ('comp_curve', 13, 1, 8), ('comp_rms_window', 14, 0, 10000),
+            ('gate_gain', 15, 0, 1000), ('gate_threshold', 16, 0, 1000), ('gate_release', 17, 0, 10000)):
+            add(param, index, low, high)
     return entries
 
 
