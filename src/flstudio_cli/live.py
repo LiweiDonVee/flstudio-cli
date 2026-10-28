@@ -236,17 +236,38 @@ def register(app, emit, json_option):
                 if confirmed or time.monotonic() >= deadline:
                     break
                 time.sleep(.04)
+            rollback = {'attempted': False, 'confirmed': False, 'error': None}
+            if not confirmed:
+                old = before.get(field) if isinstance(before, dict) else None
+                if isinstance(old, (int, float)) and math.isfinite(old):
+                    rollback_params = dict(params)
+                    if 'value' in rollback_params:
+                        rollback_params['value'] = old
+                    elif field in rollback_params:
+                        rollback_params[field] = old
+                    elif field == 'bpm' and 'bpm' in rollback_params:
+                        rollback_params['bpm'] = old
+                    else:
+                        rollback_params = None
+                    if rollback_params is not None:
+                        rollback['attempted'] = True
+                        try:
+                            bridge.call(setter, rollback_params)
+                            restored = bridge.call(getter, read_params)
+                            rollback['confirmed'] = isinstance(restored.get(field), (int, float)) and math.isclose(restored.get(field), old, abs_tol=.0001)
+                            after = restored
+                        except Exception as error:
+                            rollback['error'] = str(error)
             emit(Result(command=command, status='verified' if confirmed else 'unknown',
                         reason_code=None if confirmed else 'live_value_not_confirmed',
                         verified_scopes=['live_host_parameter_value' if field == 'v' else 'live_value'] if confirmed else [],
                         data={'backend': bridge.backend, 'before': before, 'after': after,
                               'submitted': True, 'live_applied': True if confirmed else None,
                               'verification_scope': 'host_readback', 'persistence_verified': False,
-                              'source_file_saved': False}))
+                              'rollback': rollback, 'source_file_saved': False}))
             if not confirmed:
                 raise click.exceptions.Exit(5)
         execute(command, apply)
-
     @live.command('status')
     @click.pass_obj
     @json_option

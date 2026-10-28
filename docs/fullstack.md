@@ -40,6 +40,14 @@ flstudio project snapshot --input result.flp --focus playlist --detail --limit 1
 ```
 
 The response always keeps the project fingerprint and counts. `context.focus`, `context.omitted` and `context.budget_exceeded` make the current visibility explicit, so an Agent can expand one section in the next turn without re-reading everything.
+Save a baseline when a session is going to span several turns, then ask only for the delta:
+
+```powershell
+flstudio project snapshot --input result.flp --focus project --focus mixer --output state.json
+flstudio project snapshot --input result.flp --focus project --focus mixer --since state.json
+```
+
+`delta.equal` means the comparable sections did not change. `delta.complete` is false when either baseline omitted a section; that keeps an omitted area from being mistaken for an unchanged area.
 
 
 For repeated read-only inspection, select only the sections an Agent needs:

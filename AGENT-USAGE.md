@@ -13,7 +13,7 @@ $fl = Join-Path $env:USERPROFILE '.local\bin\flstudio.exe'
 文件编曲无需MIDI桥、控制器脚本或MCP。默认FL安装目录为
 `C:\Program Files\Image-Line\FL Studio 2026`；不同位置用build的`--template`和render/verify的`--fl-install`指定。
 
-1. 先 `project inspect --input FILE --summary`；需要完整音符时去掉summary。 长程会话先用 `project snapshot --input FILE --focus project --focus channels --budget 12000`；响应内的 `context.omitted` 明确省略项，再按需只展开 Playlist、Mixer 或 Automation。`project validate --input FILE` 用来交付前做只读结构预检。
+1. 先 `project inspect --input FILE --summary`；需要完整音符时去掉summary。 长程会话先用 `project snapshot --input FILE --focus project --focus channels --budget 12000`；响应内的 `context.omitted` 明确省略项，再按需只展开 Playlist、Mixer 或 Automation。`project validate --input FILE` 用来交付前做只读结构预检。 需要跨多轮时加 `--output state.json`；下一轮用 `--since state.json`，读取 `delta.equal` 和 `delta.complete`，不会把被省略的区域误判为未变化。
 2. 新曲 `project build --request song.json --output NEW.flp`；已有工程 `project edit` 或 `notes replace`。格式见[请求说明](docs/quickstart-0.2.md)。
 3. Pattern编号从1开始，通道/Mixer/效果槽从0开始。时间是工程PPQ的整数ticks；保存文件的pan范围±6400，live pan范围±1，都以0居中。
 4. `--dry-run`只预览，不写工程、不渲染、不联系MIDI桥。输出必须是新路径，原曲不覆盖。

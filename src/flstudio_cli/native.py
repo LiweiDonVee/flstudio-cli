@@ -165,8 +165,23 @@ def read_audio(path: Path) -> tuple[dict, list[float]]:
         values = [int.from_bytes(raw[i:i + 3], 'little', signed=True) / 8388608 for i in range(0, len(raw), 3)]
     peak = max(map(abs, values), default=0.0)
     rms = math.sqrt(sum(value * value for value in values) / max(1, len(values)))
+    def dbfs(value):
+        # PCM full scale is 1.0. Keep silence finite so JSON consumers do not
+        # have to special-case -Infinity.
+        return round(20 * math.log10(max(value, 1e-12)), 3)
+    channel_metrics = []
+    for channel in range(channels):
+        samples = values[channel::channels]
+        channel_peak = max(map(abs, samples), default=0.0)
+        channel_rms = math.sqrt(sum(value * value for value in samples) / max(1, len(samples)))
+        channel_metrics.append({'channel': channel, 'peak': channel_peak,
+                                'peak_dbfs': dbfs(channel_peak), 'rms': channel_rms,
+                                'rms_dbfs': dbfs(channel_rms)})
+    crest_factor = peak / rms if rms else 0.0
     return {'sample_rate': rate, 'channels': channels, 'sample_width': width, 'frames': frames,
             'duration_seconds': frames / rate, 'peak': peak, 'rms': rms,
+            'peak_dbfs': dbfs(peak), 'rms_dbfs': dbfs(rms),
+            'crest_factor': crest_factor, 'channel_metrics': channel_metrics,
             'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}, values
 
 

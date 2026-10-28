@@ -1,6 +1,6 @@
 # 命令入口
 
-当前版本0.2.0。业务输出为UTF-8 JSON；帮助也由 `--help` 返回。无需旧MCP或9787服务。
+当前版本1.0.1。业务输出为UTF-8 JSON；帮助也由 `--help` 返回。无需旧MCP或9787服务。
 
 | 命令 | 实际作用 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | `plan build --request JSON --plan-out JSON` | 为带output路径的notes.replace请求建立源hash绑定计划 |
 | `plan apply --file JSON` | 检查请求hash和源hash后写入新副本 |
 | `render wav --project FLP --output WAV` | 实际FL原生渲染，当前编辑器可保持打开 |
-| `audio inspect --input WAV` | 查看实际PCM帧数、时长、峰值/RMS |
+| `audio inspect --input WAV` | 查看实际PCM帧数、时长、峰值/RMS、dBFS、每声道电平与crest factor |
 | `capabilities` | 已实现与尚未实现的能力分开列出 |
 | `flp probe --input FLP` | 仅检查容器，比完整inspect更有限 |
 

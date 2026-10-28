@@ -43,8 +43,8 @@ def compare(before, after, *, details=False):
             record('notes', {'pattern_number': number, 'channel_iid': iid}, note_a.get(iid), note_b.get(iid))
     def clip_key(clip):
         return clip['arrangement'], clip.get('instance_id') if clip.get('instance_id') is not None else clip['clip_index']
-    a, b = ({clip_key(clip): {k: v for k, v in clip.items() if k != 'clip_index'} for clip in doc['playlist']}
-            for doc in (before, after))
+    a, b = ({clip_key(clip): {k: v for k, v in clip.items() if k != 'clip_index'} for clip in project.get('playlist', [])}
+            for project in (before, after))
     for key in sorted(a.keys() | b.keys()):
         record('playlist', {'arrangement': key[0], 'instance_id': key[1]}, a.get(key), b.get(key))
     return {'equal': not changes, 'change_count': len(changes), 'changes': changes,

@@ -66,7 +66,7 @@ def write_curve(project, channel, points):
         old_tension = struct.unpack_from('<f', event.data, 37 + index * 24)[0] if index < count else 0.0
         position, value, tension = point['position_beats'], point['value'], point.get('tension', old_tension)
         if (any(type(x) not in (float, int) or not math.isfinite(x) for x in (position, value, tension))
-                or position < previous or not -.001 <= value <= 1.001 or not -1 <= tension <= 1):
+                or position < previous or not 0 <= value <= 1 or not -1 <= tension <= 1):
             raise ValueError('Points require sorted nonnegative beats, finite value 0..1 and tension -1..1')
         # An existing point retains its exact FL interpolation bytes unless
         # explicitly changed. New points inherit the first FL-authored point.
@@ -123,6 +123,10 @@ def target_address(project, target):
         if set(target) != required:
             raise ValueError('Mixer automation target fields do not match its kind')
         track = target['track']
+        # Validate the source track before indexing the parsed mixer list.
+        # Without this, an out-of-range mixer_send target leaked IndexError
+        # (and a traceback) instead of the CLI's normal input error.
+        track_address(project, track)
         if kind == 'mixer_send':
             destination = target['to']
             track_address(project, destination)

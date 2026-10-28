@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 import hashlib
 import json
 
@@ -10,6 +11,7 @@ from .fields import arrangements
 from .flp import Project
 
 FOCUS = ("project", "channels", "patterns", "playlist", "mixer", "automation", "arrangements")
+SNAPSHOT_KIND = "flstudio.project.snapshot"
 
 
 def _clip_sample(clips, limit):
@@ -98,9 +100,6 @@ def snapshot(project: Project, *, detail: bool = False, limit: int = 32,
     if budget is not None:
         if type(budget) is not int or not 2000 <= budget <= 1000000:
             raise ValueError("snapshot budget must be 2000..1000000 characters")
-        # Keep identity/counts first, then drop the least useful expanded data
-        # until the envelope fits. The omitted list tells the next Agent what
-        # to request explicitly in a follow-up.
         drop_order = ["playlist_detail"] + [name for name in ("playlist", "automation", "patterns", "mixer", "channels", "arrangements") if name not in selected] + [name for name in ("playlist", "automation", "patterns", "mixer", "channels", "arrangements") if name in selected]
         for name in drop_order:
             if len(json.dumps(data, ensure_ascii=False, separators=(",", ":"))) <= budget:
@@ -111,6 +110,79 @@ def snapshot(project: Project, *, detail: bool = False, limit: int = 32,
         data["context"]["budget"] = budget
         data["context"]["budget_exceeded"] = len(json.dumps(data, ensure_ascii=False, separators=(",", ":"))) > budget
     return data
+
+
+def _snapshot_file(path: Path) -> dict:
+    from .json_output import decode_json
+    try:
+        raw = decode_json(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Invalid snapshot file: {path}: {exc}") from None
+    if isinstance(raw, dict) and raw.get("kind") == SNAPSHOT_KIND and isinstance(raw.get("snapshot"), dict):
+        return raw["snapshot"]
+    if isinstance(raw, dict) and raw.get("command") == "project snapshot" and isinstance(raw.get("data"), dict):
+        return raw["data"]
+    if isinstance(raw, dict) and isinstance(raw.get("current"), dict):
+        return raw["current"]
+    if isinstance(raw, dict) and isinstance(raw.get("project"), dict) and isinstance(raw.get("counts"), dict):
+        return raw
+    raise ValueError(f"Snapshot file has an unsupported shape: {path}")
+
+
+def _row_key(section, row):
+    keys = {"channels": "iid", "patterns": "number", "mixer": "index",
+            "automation": "channel_iid", "arrangements": "index"}
+    key = keys.get(section)
+    return row.get(key) if key else None
+
+
+def compare_snapshots(before: dict, after: dict) -> dict:
+    """Compare two bounded snapshots without pretending omitted sections are equal."""
+    comparable, unknown, changes = [], [], []
+    sections = ("project", "counts", "channels", "patterns", "playlist", "mixer", "automation", "arrangements")
+    before_omitted = set(before.get("context", {}).get("omitted", []))
+    after_omitted = set(after.get("context", {}).get("omitted", []))
+    for section in sections:
+        if section not in before or section not in after or section in before_omitted or section in after_omitted:
+            unknown.append(section)
+            continue
+        comparable.append(section)
+        left, right = before[section], after[section]
+        if isinstance(left, list) and isinstance(right, list):
+            left_rows = {_row_key(section, row): row for row in left if _row_key(section, row) is not None}
+            right_rows = {_row_key(section, row): row for row in right if _row_key(section, row) is not None}
+            for key in sorted(left_rows.keys() | right_rows.keys(), key=lambda value: str(value)):
+                old, new = left_rows.get(key), right_rows.get(key)
+                if old != new:
+                    changes.append({"section": section, "key": key,
+                                    "change": "added" if old is None else "removed" if new is None else "modified",
+                                    "before": old, "after": new})
+        elif left != right:
+            changes.append({"section": section, "change": "modified", "before": left, "after": right})
+    source_before = before.get("project", {}).get("source_sha256")
+    source_after = after.get("project", {}).get("source_sha256")
+    return {
+        "equal": not changes,
+        "complete": not unknown,
+        "source_changed": source_before != source_after,
+        "from": {"source_sha256": source_before, "path": before.get("project", {}).get("path")},
+        "to": {"source_sha256": source_after, "path": after.get("project", {}).get("path")},
+        "compared_sections": comparable,
+        "unknown_sections": sorted(set(unknown)),
+        "change_count": len(changes),
+        "changes": changes[:128],
+        "changes_truncated": max(0, len(changes) - 128),
+    }
+
+
+def write_snapshot(path: Path, data: dict) -> Path:
+    from .json_output import canonical_json
+    path = path.resolve()
+    if path.exists() or not path.parent.is_dir():
+        raise ValueError("Choose a new snapshot path with an existing parent")
+    payload = {"kind": SNAPSHOT_KIND, "schema_version": 1, "snapshot": data}
+    path.write_text(canonical_json(payload) + "\n", encoding="utf-8", newline="\n")
+    return path
 
 
 def register(project_group, emit, json_option):
@@ -124,11 +196,19 @@ def register(project_group, emit, json_option):
     @click.option("--detail", is_flag=True, help="Include bounded note/Playlist detail samples.")
     @click.option("--limit", type=click.IntRange(1, 200), default=32, show_default=True)
     @click.option("--budget", type=click.IntRange(2000, 1000000), help="Maximum approximate JSON characters.")
+    @click.option("--output", type=click.Path(path_type=Path), help="Save a reusable snapshot baseline; the path must be new.")
+    @click.option("--since", type=click.Path(path_type=Path), help="Compare against a snapshot baseline and return only the bounded delta.")
     @json_option
-    def command(source, focus, detail, limit, budget):
-        """Emit compact context for a long-running Agent session."""
+    def command(source, focus, detail, limit, budget, output, since):
+        """Emit compact context, optionally saving or comparing a baseline."""
         selected = focus or FOCUS
-        emit(Result(command="project snapshot", status="verified",
-                    verified_scopes=["saved_project_overview"],
-                    data=snapshot(Project.read(source), detail=detail, limit=limit,
-                                  focus=selected, budget=budget)))
+        current = snapshot(Project.read(source), detail=detail, limit=limit,
+                           focus=selected, budget=budget)
+        response = current
+        if since:
+            response = {"current": current, "delta": compare_snapshots(_snapshot_file(since), current)}
+        if output:
+            written = write_snapshot(output, current)
+            response = {**response, "snapshot_file": str(written)}
+        emit(Result(command="project snapshot", status="artifact_ready" if output else "verified",
+                    verified_scopes=["saved_project_overview"] + (["snapshot_file"] if output else []), data=response))

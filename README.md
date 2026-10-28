@@ -6,7 +6,7 @@ and control an addressed FL session through a standalone controller.
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
 
-Version 1.0.0 is the stable fullstack release. New Automation,
+Version 1.0.1 is the stable fullstack release. New Automation,
 Playlist, session and VST3 workflows are described in [fullstack work](docs/fullstack.md).
 Its supported scopes and remaining GUI collaboration boundaries are documented in [release 1.0.0](docs/release-1.0.0.md).
 
@@ -24,6 +24,7 @@ flstudio project inspect --input my-beat.flp --summary
 flstudio project validate --input my-beat.flp
 flstudio project snapshot --input my-beat.flp --focus channels --focus mixer --budget 12000
 flstudio render wav --project my-beat.flp --output my-beat.wav
+flstudio audio inspect --input my-beat.wav
 ```
 
 If a running terminal has not refreshed PATH, use
@@ -40,6 +41,7 @@ flstudio project edit --input song.flp --request changes.json --output mixed.flp
 
 `project validate` is a read-only preflight for the saved envelope, channel/note references, Mixer routes, Automation links and encode round-trip. It returns a failed result before an Agent hands an invalid artifact to FL.
 `project snapshot` emits stable counts and bounded sections for long-running Agent context. Use repeated `--focus` values, `--detail`, `--limit` and `--budget` to expand only what the current step needs.
+For a multi-turn session, save a baseline with `--output state.json` and query `--since state.json`; the delta reports changed sections and marks omitted sections as unknown.
 
 
 The file backend supports explicit pattern/channel notes, pattern/audio/automation
@@ -66,6 +68,8 @@ Reeverb 2, Soft Clipper and Limiter controls.
 
 [Sytrus, mixer and FX request reference](docs/sytrus-mixing.md) ·
 [1.0.0 release evidence](docs/release-1.0.0.md) · [0.5 native audio evidence](docs/release-0.5.md)
+
+[1.0.1 release notes](docs/release-1.0.1.md)
 
 ## Parameter state and actual audio response
 
