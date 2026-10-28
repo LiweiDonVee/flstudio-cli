@@ -6,9 +6,9 @@ and control an addressed FL session through a standalone controller.
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
 
-Version 1.0.2 is the stable fullstack release. New Automation,
+Version 1.0.3 is the stable fullstack release. New Automation,
 Playlist, session and VST3 workflows are described in [fullstack work](docs/fullstack.md).
-Its supported scopes and remaining GUI collaboration boundaries are documented in [release 1.0.2](docs/release-1.0.2.md).
+Its supported scopes and remaining GUI collaboration boundaries are documented in [release 1.0.3](docs/release-1.0.3.md).
 
 ## Install and make a beat
 

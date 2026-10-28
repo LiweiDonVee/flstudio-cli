@@ -1,4 +1,4 @@
-# Fullstack implementation — 1.0.2
+# Fullstack implementation — 1.0.3
 
 This branch expands FL project operations against the reference projects in
 the supplied integration note. It is not a claim of complete GUI coverage or

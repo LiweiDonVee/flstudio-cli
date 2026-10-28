@@ -47,6 +47,8 @@ def list_capabilities() -> list[dict]:
     add('project.plugin_identity', 'persistence', 'flp_file', ['Wrapper name/vendor/module path and raw class-ID bytes; plugin state remains opaque'])
     add('project.validate', 'offline_fixture', 'flp_file', ['Read-only structural and semantic checks; does not run FL or certify private plugin state'], 'docs/fullstack.md')
     add('project.snapshot', 'offline_fixture', 'flp_file', ['Bounded context output; omitted sections are explicit and can be requested independently'], 'docs/fullstack.md')
+    add('project.snapshot_delta', 'offline_fixture', 'flp_file', ['Baseline files are immutable; equal only covers comparable sections, while omitted sections remain unknown'], 'docs/fullstack.md')
+    add('audio.inspect', 'offline_fixture', 'filesystem', ['Decoded PCM levels include aggregate and per-channel peak/RMS dBFS; no LUFS or true-peak claim'], 'docs/commands.md', requires_desktop=False)
     add('plugin.saved_settings', 'persistence', 'flp_file', ['Common Wrapper flags; known small native plugin raw fields and Notebook 2 Unicode pages',
         'VST MIDI/processing settings are read-only; unknown state bytes are retained'])
     add('session.ui', 'persistence', 'owned_window_messages', ['Private CLI-owned workers only; screenshots must be inspected before addressed input',
