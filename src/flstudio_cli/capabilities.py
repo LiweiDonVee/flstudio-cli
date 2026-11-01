@@ -44,6 +44,14 @@ def list_capabilities() -> list[dict]:
         'Host normalized values do not certify canonical plugin values or persistence'])
     add('session.plugin_persistence', 'persistence', 'addressed_controller', ['Explicit owned checkpoint and separate reopen worker',
         'Numeric expectations checked against reopened values; original worker continues'])
+    add('sound-design.task_candidates', 'audio', 'addressed_controller', ['Isolated task/candidate branches with native complete-state and cold-reopen checks',
+        'Actual excerpt MIDI/context retained; generic control covers only host-exposed parameters'], 'docs/sound-design/README.md')
+    add('sound-design.audition_compare', 'audio', 'fl_native_batch', ['Raw solo/context/accompaniment and repeat/reopened audio; optional NumPy extra',
+        'RMS-matched previews and signal/context occupancy are not listening or musical-quality scores'], 'docs/sound-design/validation.md')
+    add('sound-design.apply_undo', 'persistence', 'flp_file', ['Resolve channel by IID and check its prior sound; new outputs preserve musical content',
+        'Complete channel state plus exclusive-insert FX; shared inserts require --channel-only'], 'docs/sound-design/README.md')
+    add('sytrus.deep_design', 'audio', 'flp_file', ['Validated Default V2/V3 layouts only: FM/RM/OUT, ratio, SH, 32 harmonic coefficients and enabled four-point VOL envelope',
+        'Arbitrary presets, filters, free envelope points and hidden modulation are outside this adapter'], 'docs/sound-design/sytrus.md')
     add('project.plugin_identity', 'persistence', 'flp_file', ['Wrapper name/vendor/module path and raw class-ID bytes; plugin state remains opaque'])
     add('project.validate', 'offline_fixture', 'flp_file', ['Read-only structural and semantic checks; does not run FL or certify private plugin state'], 'docs/fullstack.md')
     add('project.snapshot', 'offline_fixture', 'flp_file', ['Bounded context output; omitted sections are explicit and can be requested independently'], 'docs/fullstack.md')

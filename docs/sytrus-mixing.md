@@ -1,4 +1,4 @@
-# Sytrus 与混音工作流（0.5）
+# Sytrus 与混音工作流（1.1）
 
 保存工程 → CLI 写新副本 → FL 原生导出 WAV。文件操作不修改当前编辑器内存。
 以下功能已在 FL Producer 26.1.6.5639 实际出音验证；索引从 0 开始。
@@ -24,7 +24,11 @@ flstudio sytrus edit --project song.flp --channel 0 --request synth.json --outpu
 其余参数采用对应宿主整数 ID，不把每个旋钮都标成单独做过音频认证。
 
 返回 `value_raw:null` 表示值仍在未解析的音色中，不能当成 0 或默认值。
-FM/RM 矩阵、自定义谐波、包络曲线点仍通过完整 `.fst` 音色或 GUI 处理。
+CLI 1.1 另有已验证的 Default 家族深层适配：`sytrus design-inspect --summary`
+按需读状态，`--operator N` 展开单个 operator；`design-edit` 或 `sound-design candidate`
+可写 FM/RM/OUT、ratio、SH、前32谐波和明确启用的四点音量包络。
+这些操作编辑保存的原生状态，矩阵旋钮仍不是宿主自动化参数；其他 preset 布局与更多隐藏状态仍需完整音色或原生 UI/capture。
+真实保存/冷重开/音频与边界见[音色设计](sound-design/README.md)，不能把此处宿主参数目录当作全插件覆盖。
 
 ## 一份请求完成混音
 

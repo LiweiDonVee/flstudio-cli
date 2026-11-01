@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "status": "documented_plugin_actions_and_unheard_design_hypotheses",
+  "execution_domain": "Real Sytrus UI or a separately verified mapping to its native state/API",
+  "not_a_cli_request_schema": true,
+  "baseline": "sytrus.md: true init contract; Default container plus explicit oscillator, matrix, envelope and FX state",
+  "unit_rule": "ui_percent is displayed knob/slider percent; seconds is an envelope design target; neither is host value_raw or live normalized 0..1",
+  "common_validation": [
+    "save new preset/project and record actual version/path",
+    "write and independently read back",
+    "reopen in real plugin",
+    "render fixed MIDI with note-off and adequate tail",
+    "match playback loudness without changing synthesis drive",
+    "listen solo and in fixed context",
+    "check mono where stereo changes"
+  ],
+  "recipes": [
+    {
+      "id": "sytrus-warm-lowpass",
+      "word": "温暖",
+      "interpretation": "rounder high-frequency balance while retaining note clarity",
+      "ambiguities": [
+        "saturation",
+        "low-mid weight",
+        "soft transient"
+      ],
+      "mechanism": "attenuate upper partials of a rich source",
+      "sources": [
+        "P01",
+        "P02",
+        "C02"
+      ],
+      "steps": [
+        {
+          "action": "reset_operator_modifiers_and_harmonics",
+          "target": "OP1",
+          "shape": "sine"
+        },
+        {
+          "action": "set_ui",
+          "target": "OP1.SH",
+          "value": 50,
+          "unit": "ui_percent",
+          "expected_shape": "saw from documented Default"
+        },
+        {
+          "action": "set_route",
+          "source": "OP1",
+          "target": "OUT",
+          "value": 0,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "set_route",
+          "source": "OP1",
+          "target": "F1",
+          "value": 100,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "set_route",
+          "source": "F1",
+          "target": "OUT",
+          "value": 100,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "select_filter",
+          "target": "F1",
+          "type": "lowpass",
+          "resonance": "low and fixed"
+        },
+        {
+          "action": "change_relative_to_recorded_baseline",
+          "target": "F1.cutoff",
+          "value": -1,
+          "unit": "octaves",
+          "mapping": "use actual Hz display or verified parameter transform"
+        }
+      ],
+      "expected": "reduced upper-partial energy; perceived warmth remains a listening hypothesis",
+      "validation": "compare equal-loudness A/B for roundness AND retained clarity, then fixed accompaniment",
+      "failure": "dull, masked or merely quieter",
+      "fallback": "restore half the cutoff change or use a triangle source; do not automatically boost bass",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-harmonic-pad.json"
+      ],
+      "local_execution_scope": "The documented internal filter route needs native UI; the example is a separately validated harmonic-source alternative, not a low-pass implementation."
+    },
+    {
+      "id": "sytrus-bright-two-operator-fm",
+      "word": "亮",
+      "interpretation": "richer spectrum without changing pitch register",
+      "ambiguities": [
+        "sharper attack",
+        "higher pitch",
+        "more loudness"
+      ],
+      "mechanism": "audio-rate modulation adds sidebands",
+      "sources": [
+        "P01",
+        "P02",
+        "C04"
+      ],
+      "steps": [
+        {
+          "action": "set_operator",
+          "target": "OP1",
+          "shape": "sine",
+          "ratio": 1,
+          "offset_hz": 0
+        },
+        {
+          "action": "set_operator",
+          "target": "OP2",
+          "shape": "sine",
+          "ratio": 2,
+          "offset_hz": 0
+        },
+        {
+          "action": "set_route",
+          "source": "OP1",
+          "target": "OUT",
+          "value": 100,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "set_route",
+          "source": "OP2",
+          "target": "OUT",
+          "value": 0,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "clear_matrix",
+          "matrix": "RM"
+        },
+        {
+          "action": "sweep_directed_modulation",
+          "matrix": "FM",
+          "source": "OP2",
+          "target": "OP1",
+          "values": [
+            0,
+            10,
+            25
+          ],
+          "unit": "ui_percent",
+          "matrix_location": "row OP1 column OP2"
+        }
+      ],
+      "expected": "changed sideband structure and waveform, not a guaranteed monotonic improvement in brightness",
+      "validation": "fixed note/register/velocity; compare gain-compensated sustained and short-note renders",
+      "failure": "harshness, weak fundamental, pitch ambiguity or no response",
+      "fallback": "reduce depth; verify carrier output, non-Pluck mode, OP2 volume and matrix direction",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-fm-bass.json",
+        "examples/sound-design/sytrus-fm-pluck.json"
+      ],
+      "local_execution_scope": "Deep Default-family matrix/envelope fields and their native sound effect were exercised; perceptual brightness remains unlistened."
+    },
+    {
+      "id": "sytrus-ethereal-envelope",
+      "word": "空灵",
+      "interpretation": "soft boundary and overlapping tail",
+      "ambiguities": [
+        "airy noise",
+        "distance/reverb",
+        "bright sparse texture"
+      ],
+      "mechanism": "slow carrier attack and release before optional stereo/space",
+      "sources": [
+        "P01",
+        "C03",
+        "R01"
+      ],
+      "steps": [
+        {
+          "action": "set_operator",
+          "target": "OP1",
+          "shape": "sine",
+          "ratio": 1,
+          "offset_hz": 0
+        },
+        {
+          "action": "set_route",
+          "source": "OP1",
+          "target": "OUT",
+          "value": 100,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "disable_fx_sends"
+        },
+        {
+          "action": "enable_envelope",
+          "target": "OP1.VOL.ENV",
+          "enabled": true
+        },
+        {
+          "action": "set_envelope_design_target",
+          "target": "OP1.VOL.ENV",
+          "attack_seconds": 0.3,
+          "decay_seconds": 0.7,
+          "sustain_fraction": 0.6,
+          "release_seconds": 0.9,
+          "mapping": "create/check real envelope points, markers and actual display units"
+        }
+      ],
+      "expected": "gentler onset and longer overlap; does not imply breathy/noisy quality",
+      "validation": "short notes and sustained chords; adequate release tail; match level before optional width/FX stage",
+      "failure": "swallowed onset or accumulating blurred tails",
+      "fallback": "shorten attack/release; if intent is breathy, create a separate low-noise candidate instead",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-harmonic-pad.json",
+        "examples/sound-design/sytrus-moving-pad.json"
+      ],
+      "local_execution_scope": "Enabled four-point envelopes are implemented. Raw times are not milliseconds; calibrate the musical phrase by rendering."
+    },
+    {
+      "id": "sytrus-thick-unison",
+      "word": "厚",
+      "interpretation": "more simultaneous detuned voices",
+      "ambiguities": [
+        "lower-octave layer",
+        "stronger low mids",
+        "denser harmony",
+        "louder"
+      ],
+      "mechanism": "unison voice beating with controlled spread",
+      "sources": [
+        "P01",
+        "C01",
+        "P03"
+      ],
+      "steps": [
+        {
+          "action": "set_ui",
+          "target": "MAIN.Unison order",
+          "value": 3,
+          "unit": "voices"
+        },
+        {
+          "action": "set_ui",
+          "target": "MAIN.Unison pitch",
+          "value": 5,
+          "unit": "ui_percent",
+          "note": "unheard small starting value, not cents"
+        },
+        {
+          "action": "set_ui",
+          "target": "MAIN.Unison pan",
+          "value": 0,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "level_match_and_compare",
+          "before": "order 1",
+          "after": "order 3",
+          "then": "separate optional pan-spread comparison"
+        }
+      ],
+      "expected": "beating and spectral/voice-density changes; thickness is listener-dependent",
+      "validation": "single notes, actual chords, fixed context and mono sum",
+      "failure": "unstable pitch, low-frequency cancellation or arrangement congestion",
+      "fallback": "return to one voice; try a small separately controlled oscillator layer or adjust register/voicing",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-harmonic-pad.json"
+      ],
+      "local_execution_scope": "Selected Sytrus unison host controls were exercised. Detune/pan raw values are not cents or guaranteed width."
+    },
+    {
+      "id": "sytrus-near-dry-articulation",
+      "word": "近",
+      "interpretation": "clear dry articulation",
+      "ambiguities": [
+        "higher level",
+        "presence-band emphasis",
+        "intimacy/breathiness"
+      ],
+      "mechanism": "retain direct sound and shorten overlap",
+      "sources": [
+        "P01",
+        "C03",
+        "R02",
+        "R03"
+      ],
+      "steps": [
+        {
+          "action": "disable_fx_sends"
+        },
+        {
+          "action": "enable_envelope",
+          "target": "OP1.VOL.ENV",
+          "enabled": true
+        },
+        {
+          "action": "set_envelope_design_target",
+          "target": "OP1.VOL.ENV",
+          "attack_seconds": 0.005,
+          "decay_seconds": 0.15,
+          "sustain_fraction": 0.7,
+          "release_seconds": 0.12,
+          "mapping": "create/check real envelope points and markers"
+        }
+      ],
+      "expected": "clearer temporal edges and gaps; perceived distance remains an experiential hypothesis",
+      "validation": "equal-loudness comparison with longer-envelope candidate, then in actual accompaniment",
+      "failure": "hard/clicky rather than close",
+      "fallback": "use Declick or slightly longer attack; restore some release/space independently",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-fm-pluck.json"
+      ],
+      "local_execution_scope": "Short envelope source control is implemented; perceived distance/close character still requires level-matched listening."
+    },
+    {
+      "id": "sytrus-grainy-rm-alternative",
+      "word": "颗粒",
+      "interpretation": "amplitude-modulation texture, tested separately from noise",
+      "ambiguities": [
+        "air/breath",
+        "broadband grit",
+        "slow beating",
+        "granular sample clouds",
+        "short rhythmic grains"
+      ],
+      "mechanism": "independent audio-rate RM path",
+      "sources": [
+        "R01",
+        "P01",
+        "C04",
+        "C05"
+      ],
+      "steps": [
+        {
+          "action": "set_operator",
+          "target": "OP1",
+          "shape": "sine",
+          "ratio": 1,
+          "offset_hz": 0
+        },
+        {
+          "action": "set_operator",
+          "target": "OP2",
+          "shape": "sine",
+          "ratio": 1.41,
+          "offset_hz": 0,
+          "note": "deliberately inharmonic design candidate; not a proven best ratio"
+        },
+        {
+          "action": "clear_matrix",
+          "matrix": "FM"
+        },
+        {
+          "action": "set_route",
+          "source": "OP2",
+          "target": "OUT",
+          "value": 0,
+          "unit": "ui_percent"
+        },
+        {
+          "action": "sweep_directed_modulation",
+          "matrix": "RM",
+          "source": "OP2",
+          "target": "OP1",
+          "values": [
+            0,
+            5,
+            10
+          ],
+          "unit": "ui_percent"
+        },
+        {
+          "action": "compare_separate_noise_candidate",
+          "target": "OP1.NS",
+          "values": [
+            0,
+            2,
+            5
+          ],
+          "unit": "ui_percent",
+          "note": "reset RM to zero before this separate experiment"
+        }
+      ],
+      "expected": "different modulation/noise signatures; neither is a universal graininess scale",
+      "validation": "fixed note and chords, matched playback level; listener distinguishes airy, rough, harsh and granular intent",
+      "failure": "only harshness, tonal ring or unrelated noise",
+      "fallback": "reduce depth/noise or return to integer ratio; if intent is sample-granular synthesis, use a genuinely suitable engine or explicit rhythmic envelope plan",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/sound-design/sytrus-rm-bass.json"
+      ],
+      "local_execution_scope": "Operator RM is implemented and rendered. RM sidebands are not granular synthesis and do not establish perceived grain."
+    }
+  ]
+}

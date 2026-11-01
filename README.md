@@ -6,9 +6,12 @@ and control an addressed FL session through a standalone controller.
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
 
-Version 1.0.3 is the stable fullstack release. New Automation,
-Playlist, session and VST3 workflows are described in [fullstack work](docs/fullstack.md).
-Its supported scopes and remaining GUI collaboration boundaries are documented in [release 1.0.3](docs/release-1.0.3.md).
+Version 1.1.0 adds delegated plugin sound design: guarded deep Sytrus editing,
+isolated candidates, actual-context auditions and recoverable complete states.
+See the [sound-design workflow](docs/sound-design/README.md),
+[plugin support matrix](docs/sound-design/support-matrix.md) and
+[real validation record](docs/sound-design/validation.md).
+Automation, Playlist, session and VST3 workflows remain in [fullstack work](docs/fullstack.md).
 
 ## Install and make a beat
 
@@ -30,6 +33,24 @@ flstudio audio inspect --input my-beat.wav
 If a running terminal has not refreshed PATH, use
 `& "$env:USERPROFILE\.local\bin\flstudio.exe"`.
 The sample drums in `examples/audio` are generated for this project.
+
+## Delegate sound design
+
+Install analysis support with `uv tool install --editable ".[sound-design]"`.
+Use the [specialist Skill](skills/flstudio-sound-design/SKILL.md) with a short
+task handoff; existing tempo, notes and context come from the actual project.
+
+```powershell
+flstudio sound-design prepare --project excerpt.flp --channel 0 --role bass --brief "Warm defined bass; preserve the kick and lead" --output-dir sound-work
+flstudio sound-design candidate --task sound-work/task.json --request examples/sound-design/sytrus-fm-bass.json
+flstudio sound-design audition --task sound-work/task.json --candidate fm-transient-bass-active
+flstudio sound-design apply --task sound-work/task.json --candidate fm-transient-bass-active --project excerpt.flp --output chosen.flp
+```
+
+The native FLP is the complete editable state. Host echo, saved state, rendered
+audio and musical preference are separate evidence; the CLI does not rate taste.
+Sytrus is the primary deep adapter. Surge XT validates the separate generic host
+path. Neither means arbitrary plugins or all Sytrus controls are supported.
 
 ## Saved projects
 

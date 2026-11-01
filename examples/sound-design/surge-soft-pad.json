@@ -1,0 +1,12 @@
+{
+  "id": "surge-soft-pad",
+  "description": "Transform the existing Surge patch into a slower background envelope with less upper-partial energy",
+  "mechanisms": ["Classic oscillator shape transformation", "Slower amplitude attack and release"],
+  "params": [
+    {"param":"A Osc 1 Shape","value":0.08},
+    {"param":"A Amp EG Attack","value":0.42},
+    {"param":"A Amp EG Release","value":0.4},
+    {"param":"A Amp EG Sustain","value":0.75}
+  ],
+  "tradeoffs": ["This exact mapping was tested on the installed Surge version; discover it again on another version"]
+}

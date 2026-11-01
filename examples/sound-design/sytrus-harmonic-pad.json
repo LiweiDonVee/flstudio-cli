@@ -1,0 +1,19 @@
+{
+  "id": "sytrus-harmonic-pad",
+  "description": "Init-based sustained additive pad with a soft onset, limited harmonics and three-voice width",
+  "mechanisms": ["Low-order additive spectrum", "Slow carrier volume envelope", "Modest unison detune and pan spread"],
+  "channel_volume_raw": 5500,
+  "sytrus_design": {
+    "init": true,
+    "operators": [{"operator":1,"ratio":2,"shape_raw":0,
+      "harmonics":[{"harmonic":2,"coefficient_raw":0.2},{"harmonic":3,"coefficient_raw":0.09},{"harmonic":5,"coefficient_raw":0.025}],
+      "volume_envelope":{"enabled":true,"attack_time_raw":0.6,"decay_time_raw":0.9,"sustain":0.7,"release_time_raw":0.7}}]
+  },
+  "sytrus": [
+    {"param":"master_level","value_raw":100},
+    {"param":"unison_order","value_raw":3},
+    {"param":"unison_pan","value_raw":70},
+    {"param":"unison_pitch","value_raw":9}
+  ],
+  "tradeoffs": ["Width can weaken mono fundamentals; compare the actual chord rhythm and lead priority", "A slow envelope can swallow short notes"]
+}

@@ -332,6 +332,8 @@ def _register_all():
     register_mixer_jobs(app, _emit, json_option)
     from .scores import register as register_score_transforms
     register_score_transforms(app.commands['notes'], _emit, json_option)
+    from .sound_design import register as register_sound_design
+    register_sound_design(app, _emit, json_option)
 
 
 def _validation_error_type():

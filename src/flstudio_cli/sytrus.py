@@ -77,7 +77,7 @@ def parameters(project, channel: int, search='') -> dict:
     return {'channel': channel, 'channel_iid': info['iid'], 'plugin': 'Sytrus', 'state_prefix_hex': info['state_prefix_hex'],
             'params': params, 'units': 'Integer native host controls; live API uses normalized 0..1',
             'limitations': ['Null means the value is inside the unchanged preset, not zero',
-                            'FM/RM matrix, custom harmonics and envelope point editing remain preset/GUI operations']}
+                            'Deep FM/RM, harmonics and four-point VOL envelope use sytrus design-edit on validated Default layouts; other states require native UI/capture']}
 
 
 def set_parameters(project, channel: int, changes: list[dict]) -> list[dict]:

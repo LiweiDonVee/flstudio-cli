@@ -1,0 +1,14 @@
+{
+  "id": "rm-edged-bass",
+  "description": "Alternative bass with a restrained noninteger-ratio RM edge and a longer body",
+  "mechanisms": ["Independent RM path instead of FM", "1.5:1 modulator/carrier ratio", "Stronger sustained carrier envelope"],
+  "sytrus_design": {
+    "init": true,
+    "matrix": [{"mode":"rm","source":2,"target":1,"value_raw":28}],
+    "operators": [
+      {"operator":1,"ratio":2,"shape_raw":0,"volume_envelope":{"attack_time_raw":0.012,"decay_time_raw":0.4,"sustain":0.9,"release_time_raw":0.1}},
+      {"operator":2,"ratio":3,"shape_raw":0}
+    ]
+  },
+  "tradeoffs": ["The RM spectrum may imply a different pitch color; this is a distinct musical option, not a guaranteed improvement"]
+}

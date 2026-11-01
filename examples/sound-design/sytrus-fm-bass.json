@@ -1,0 +1,14 @@
+{
+  "id": "fm-transient-bass-active",
+  "description": "Init-based two-operator FM bass: brief upper sidebands settle into the carrier body",
+  "mechanisms": ["Directed OP2-to-OP1 FM", "2:1 modulator/carrier ratio", "Independent fast-decay modulator volume envelope"],
+  "sytrus_design": {
+    "init": true,
+    "matrix": [{"mode":"fm","source":2,"target":1,"value_raw":60}],
+    "operators": [
+      {"operator":1,"ratio":2,"shape_raw":0,"volume_envelope":{"enabled":true,"attack_time_raw":0.0075,"decay_time_raw":0.25,"sustain":0.75,"release_time_raw":0.12}},
+      {"operator":2,"ratio":4,"shape_raw":0,"volume_envelope":{"enabled":true,"attack_time_raw":0.005,"decay_time_raw":0.12,"sustain":0.08,"release_time_raw":0.06}}
+    ]
+  },
+  "tradeoffs": ["FM attack may conflict with kick; inspect the actual note onsets and compare matched context audio", "time_raw is serialized Sytrus duration, not an asserted seconds mapping"]
+}

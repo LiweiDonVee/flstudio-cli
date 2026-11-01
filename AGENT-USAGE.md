@@ -1,4 +1,4 @@
-# Agent quickstart / 给 Agent 的快速入口
+# Agent quickstart / 给 Agent 的快速入口（CLI 1.1.0）
 
 Windows x64；本机验证为 FL Studio Producer 26.1.6.5639。Python 3.12+，安装 uv。
 
@@ -23,6 +23,13 @@ $fl = Join-Path $env:USERPROFILE '.local\bin\flstudio.exe'
 
 `artifact_ready`表示保存文件回读；`verified_scopes`列出实际证据。参数验证的音频来自隔离副本和受控输入，不冒充当前GUI状态。
 遇到unknown或不支持的插件状态，不把它解释成成功。
+
+音色委派读 [flstudio-sound-design Skill](skills/flstudio-sound-design/SKILL.md)：
+主代理对实际短片段 `sound-design prepare`，把 task.json 交给子代理；子代理在独立目录执行
+`candidate → audition → compare → parent分支修订`，返回完整FLP、solo/context音频与证据。
+主代理 `sound-design apply` 写新副本，`--undo` 撤回，按IID寻址且检查旧音色。
+需要NumPy时安装 `.[sound-design]`；Sytrus深层设计、Surge对照、完整状态和隐藏资源边界见
+[音色工作流](docs/sound-design/README.md)。不要将信号指标当作听评或主观质量证据。
 
 人机协作方式：GUI保存当前工程 → CLI写新副本 → GUI打开新副本继续编辑。
 已有/新建有链接 Automation、逐条变长 Playlist、Audio Clip 裁切与增益见

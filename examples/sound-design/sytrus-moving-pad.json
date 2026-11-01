@@ -1,0 +1,14 @@
+{
+  "id": "sytrus-moving-pad",
+  "description": "FM texture whose harmonic density grows after the carrier onset, with a narrower image",
+  "mechanisms": ["OP2-to-OP1 FM at a 1.5:1 ratio", "Slow modulator envelope changes brightness independently of amplitude", "Single-voice alternative to unison width"],
+  "sytrus_design": {
+    "init": true,
+    "matrix": [{"mode":"fm","source":2,"target":1,"value_raw":34}],
+    "operators": [
+      {"operator":1,"ratio":2,"volume_envelope":{"enabled":true,"attack_time_raw":0.18,"decay_time_raw":0.8,"sustain":0.75,"release_time_raw":0.5}},
+      {"operator":2,"ratio":3,"volume_envelope":{"enabled":true,"attack_time_raw":0.9,"decay_time_raw":0.7,"sustain":0.35,"release_time_raw":0.2}}
+    ]
+  },
+  "tradeoffs": ["Moving sidebands can add interest but may compete with the lead; the matched context decides preference"]
+}

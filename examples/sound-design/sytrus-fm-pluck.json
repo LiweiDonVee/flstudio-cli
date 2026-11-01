@@ -1,0 +1,14 @@
+{
+  "id": "fm-pluck",
+  "description": "FM pluck with harmonically related attack and a short release for the syncopated lead phrase",
+  "mechanisms": ["OP2-to-OP1 FM", "3:1 modulator/carrier ratio", "Fast carrier and modulator decay"],
+  "sytrus_design": {
+    "init": true,
+    "matrix": [{"mode":"fm","source":2,"target":1,"value_raw":86}],
+    "operators": [
+      {"operator":1,"ratio":2,"volume_envelope":{"attack_time_raw":0.005,"decay_time_raw":0.18,"sustain":0.15,"release_time_raw":0.08}},
+      {"operator":2,"ratio":6,"volume_envelope":{"attack_time_raw":0.005,"decay_time_raw":0.1,"sustain":0.03,"release_time_raw":0.05}}
+    ]
+  },
+  "tradeoffs": ["High FM depth can add a bell-like edge; check lead salience and rests in context"]
+}

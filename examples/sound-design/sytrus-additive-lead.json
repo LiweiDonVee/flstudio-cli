@@ -1,0 +1,14 @@
+{
+  "id": "additive-lead",
+  "description": "Additive harmonic lead with a round onset and controlled upper partials, without an FM attack",
+  "mechanisms": ["Explicit harmonic coefficients", "Zero initialized FM/RM", "A more sustained carrier envelope"],
+  "sytrus_design": {
+    "init": true,
+    "operators": [
+      {"operator":1,"ratio":2,"shape_raw":0,
+       "harmonics":[{"harmonic":2,"coefficient_raw":0.28},{"harmonic":3,"coefficient_raw":0.16},{"harmonic":5,"coefficient_raw":0.055}],
+       "volume_envelope":{"attack_time_raw":0.025,"decay_time_raw":0.28,"sustain":0.55,"release_time_raw":0.12}}
+    ]
+  },
+  "tradeoffs": ["Sustained harmonics may occupy the pad's register; assess density and voice priority before EQ"]
+}
