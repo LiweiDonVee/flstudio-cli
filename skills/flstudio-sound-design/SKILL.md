@@ -10,6 +10,8 @@ candidate has a musical purpose, a distinct synthesis hypothesis, and evidence
 that its full saved state survives reopening. Parameter names and host echoes
 alone do not establish that evidence.
 Requires flstudio-cli 1.2.0+; PCM analysis uses its optional `sound-design` extra.
+Performance mappings and addressed previews require 1.3.0.dev0+; inspect actual
+`--help` and support rather than assuming an older stable build has them.
 
 ## Main-agent handoff
 
@@ -138,3 +140,7 @@ Read [references/requests.md](references/requests.md) for request/result shapes
 and [references/sytrus.md](references/sytrus.md) for actual deep Sytrus operations.
 For 3xOsc, Maximus, WaveShaper/Delay3, Edison/Slicex and native Slide/portamento,
 read [Producer operations](references/producer-plugins.md) only when needed.
+For Sytrus KEY/velocity/Mod X/Y maps or listening to timbre, Pattern, Piano Roll,
+track or song, read [expression and native model listening](references/expression-listening.md).
+In DSH use the mounted `listen_audio` for actual audio-model observations; both
+the main and specialist preset can call it. Record its attribution and coverage.

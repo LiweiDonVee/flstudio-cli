@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from contextlib import contextmanager
 import json
+import hashlib
 import math
 import re
 import time
@@ -494,6 +495,8 @@ def audition(task_file, identifier, install=INSTALL, repeats=2, timeout=None):
 
 def _audition(task_file, identifier, install=INSTALL, repeats=2, timeout=None):
     from .native import render
+    from .audio_preview import _sha
+    from .sound_state import sample_fingerprint
     from .sound_audio import analyze, compare, overlap, _numpy
     _numpy()
     task = _task(task_file)
@@ -514,27 +517,42 @@ def _audition(task_file, identifier, install=INSTALL, repeats=2, timeout=None):
     progress = read(progress_path) if progress_path.exists() else {'kind':'flstudio.sound-design.audition','candidate':identifier,'renders':{},'subjective_listening':'not_performed'}
     for mode in ('context','solo','rest','reopened'):
         doc = Project.read(report['artifact'] if mode!='reopened' else folder/f'reopened-{report["attempt"]}.flp')
-        if mode in ('solo','rest'):
+        if mode == 'solo':
+            from .audio_preview import isolate_channels
+            progress['solo_scope'] = isolate_channels(doc, {channel})
+        elif mode == 'rest':
             for ch in doc.channels():
                 if ch['type']==5: continue
-                if mode=='solo' and ch['index'] != channel or mode=='rest' and ch['index']==channel:
+                if ch['index']==channel:
                     doc.set_channel(ch['index'], {'muted':True})
         project_file = output/(mode+'.flp')
+        expected_hash = hashlib.sha256(doc.encode()).hexdigest()
+        dependencies = sample_fingerprint(doc, folder)
+        if project_file.exists() and _sha(project_file) != expected_hash:
+            project_file = output/(mode+'-'+expected_hash[:12]+'.flp')
+        if project_file.exists() and _sha(project_file) != expected_hash:
+            raise ValueError('Cached audition project was modified; preserve it and audition a new candidate branch')
         if not project_file.exists(): doc.save(project_file)
         for index in range(repeats if mode=='context' else 1):
             key = mode + (f'-{index+1}' if mode=='context' else '')
             previous=progress['renders'].get(key,{})
-            if previous.get('status')=='verified':
+            if (previous.get('status')=='verified' and previous.get('input_sha256')==expected_hash and
+                    previous.get('known_sample_dependencies')==dependencies and
+                    Path(previous.get('output','')).is_file() and
+                    _sha(previous['output'])==previous.get('audio',{}).get('sha256')):
                 if 'analysis' not in previous:
                     previous['analysis']=analyze(Path(previous['output']))
                     write(progress_path,progress)
                 continue
+            if previous:
+                progress.setdefault('superseded_renders',[]).append({'key':key,**previous})
             wav = output/(key+'.wav')
             if wav.exists():
                 # An interrupted worker may leave a partial artifact. Keep it
                 # as evidence and use a fresh output rather than overwrite it.
                 wav = output/(key+f'-retry-{time.time_ns()}.wav')
             result = render(project_file,wav,install,timeout,allow_silence=mode=='rest')
+            result['known_sample_dependencies'] = dependencies
             progress['renders'][key] = result
             write(progress_path,progress)
             if result['status']!='verified':
@@ -586,7 +604,19 @@ def compare_candidates(task_file, identifiers, output):
     if output.exists() or not output.parent.is_dir(): raise ValueError('Choose a new comparison directory')
     output.mkdir()
     previews = {mode:matched_previews(files,output/mode,task['duration_seconds']) for mode,files in paths.items()}
-    data = {'kind':'flstudio.sound-design.comparison','candidates':rows,'previews':previews,
+    import wave
+    from .audio_preview import _artifact
+    artifacts=[]
+    for mode,group in previews.items():
+        for candidate_row,file in zip(rows,group['files']):
+            path=Path(file['preview'])
+            with wave.open(str(path),'rb') as stream:duration=stream.getnframes()/stream.getframerate()
+            item=_artifact(path,f'{candidate_row["id"]}:{mode}','audio/wav',duration)
+            item['conversion']={'source':file['source'],'gain_db':file['gain_db'],
+                                'method':group['method'],'raw_audio_preserved':True}
+            artifacts.append(item)
+    data = {'kind':'flstudio.sound-design.comparison','status':'ready','candidates':rows,'previews':previews,
+            'artifacts':artifacts,'listening_artifact_id':f'{rows[0]["id"]}:context',
             'subjective_listening':'not_performed','recommendation':None,
             'decision_required':'Compare both matched solo and actual-context excerpts. Record the listener/reasons and tradeoffs; signal proxies alone do not rank musical quality.'}
     write(output/'comparison.json',data,new=True)
@@ -642,7 +672,7 @@ def support(project,channel):
             deep={'available_on_current_state':True,'profile':observed['profile']}
         except ValueError as exc:
             deep={'available_on_current_state':False,'reason':str(exc),'next_action':'Intentionally init a new candidate from local Default, or use native UI/capture; do not patch this preset layout'}
-        deep.update(operations=['6x6 FM/RM operator matrix','OP-to-filter, FX/OUT sends and source PAN','operator ratio','SH modifier','first32 harmonic coefficients','four-point volume and filter CUT envelopes with explicit enable'],limitations=LIMITATIONS)
+        deep.update(operations=['6x6 FM/RM operator matrix','OP-to-filter, FX/OUT sends and source PAN','operator ratio','SH modifier','first32 harmonic coefficients','four-point volume and filter CUT envelopes with explicit enable','KEY/velocity/Mod X/Y two-point mappings for operator VOL and filter CUT'],limitations=LIMITATIONS)
         limitations.append('Deep Sytrus design is restricted to the explicitly validated native layouts/fields; matrix knobs are not host automation parameters')
     elif plugin in ('3x Osc','Slicex'):
         from .stock_plugins import inspect
@@ -795,6 +825,14 @@ def handoff_report(task_file,identifiers,output,recommended=None,rationale='',co
     if recommended and (recommended not in identifiers or not rationale.strip()):
         raise ValueError('A recommendation must name an included candidate and explain its musical rationale')
     listener=listening or {'status':'not_performed','who':None,'ability':'No listening supplied','method':'Signal analysis only'}
+    if isinstance(listener,dict) and listener.get('status')=='evaluated' and isinstance(listener.get('listening'),dict):
+        receipt=listener
+        listener={**{k:v for k,v in receipt['listening'].items() if k in ('status','who','ability','method','listener','scope')},
+                  'inputs':receipt.get('inputs',[]),
+                  'agent_received_audio_directly':receipt.get('agent_received_audio_directly',False),
+                  'observations_truncated':receipt.get('observations_truncated',False)}
+        if receipt.get('evidence_file'):
+            listener['evidence_file']=receipt['evidence_file']
     if not isinstance(listener,dict) or listener.get('status') not in ('performed','not_performed'):
         raise ValueError('Listening metadata requires status performed or not_performed')
     if listener['status']=='performed' and not all(isinstance(listener.get(key),str) and listener[key].strip() for key in ('who','method')):
@@ -935,7 +973,10 @@ def register(app,emit,json_option):
     @click.option('--listening',type=click.Path(path_type=Path),help='Optional caller listening evidence JSON; the CLI does not listen.')
     @json_option
     def report_command(task,identifiers,output,recommended,rationale,comparison,listening):
-        data=handoff_report(task,identifiers,output,recommended,rationale,comparison,read(listening) if listening else None)
+        listening_data=read(listening) if listening else None
+        if isinstance(listening_data,dict):
+            listening_data['evidence_file']=str(listening.resolve())
+        data=handoff_report(task,identifiers,output,recommended,rationale,comparison,listening_data)
         emit(Result(command='sound-design report',status='artifact_ready',verified_scopes=['saved_sound_handoff_index'],
                     data={'output':str(output.resolve()),'candidates':len(data['candidates']),'recommended':recommended,
                           'listening':data['listening'],'details_omitted':data['details_omitted']}))

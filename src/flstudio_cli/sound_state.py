@@ -150,3 +150,17 @@ def rebase_samples(project, source_dir):
             if not path.is_file():
                 raise ValueError(f'Unresolved relative sample {raw!r}; locate the asset before preparing a relocated task')
             project.set_channel(channel['index'], {'sample_path': str(path.resolve())})
+
+
+def sample_fingerprint(project, source_dir=None):
+    """Known channel samples only; plugin-managed assets remain opaque."""
+    import hashlib
+    result=[]
+    for row in resources(project,source_dir)['known']:
+        if row['kind']!='channel_sample':continue
+        if not row['exists']:
+            raise ValueError(f'Known channel sample is missing: {row["path"]}; locate/rebind before rendering')
+        with Path(row['path']).open('rb') as stream:
+            digest=hashlib.file_digest(stream,'sha256').hexdigest()
+        result.append({'channel':row['channel'],'path':row['path'],'sha256':digest})
+    return result

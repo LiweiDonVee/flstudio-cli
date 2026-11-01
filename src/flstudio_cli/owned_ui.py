@@ -185,7 +185,7 @@ def submit_key(session, observation, key):
 
 
 def submit_pointer(session, observation, action):
-    if set(action) not in ({'move'}, {'click'}, {'drag'}): raise ValueError('Choose one move, click or drag')
+    if set(action) not in ({'move'}, {'click'}, {'right_click'}, {'drag'}): raise ValueError('Choose one move, click, right_click or drag')
     return _child({'operation': 'pointer', 'session': session, 'observation': observation, 'pointer': action})
 
 
@@ -277,6 +277,7 @@ def _submit_key(session, observation, key=None, pointer=None):
                     messages.append((0x200, 1, packed(step)))
                 messages.append((0x202, 0, packed(end)))
             elif action == 'click': messages.append((0x202, 0, position))
+            elif action == 'right_click': messages.extend(((0x204, 2, position), (0x205, 0, position)))
         for message, parameter, position in messages:
             if not u.PostMessageW(hwnd, message, parameter, position): raise c.WinError(c.get_last_error())
         return {'submitted': True, 'effect_verified': False, 'window': hwnd, 'key': key, 'pointer': pointer, 'route': route,

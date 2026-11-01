@@ -50,8 +50,13 @@ def list_capabilities() -> list[dict]:
         'RMS-matched previews and signal/context occupancy are not listening or musical-quality scores'], 'docs/sound-design/validation.md')
     add('sound-design.apply_undo', 'persistence', 'flp_file', ['Resolve channel by IID and check its prior sound; new outputs preserve musical content',
         'Complete channel state plus exclusive-insert FX; shared inserts require --channel-only'], 'docs/sound-design/README.md')
-    add('sytrus.deep_design', 'audio', 'flp_file', ['Validated Default V2/V3 layouts: FM/RM, OP-to-filter/FX/OUT/PAN, ratio, SH, 32 harmonics, four-point VOL and filter CUT envelopes',
+    add('sytrus.deep_design', 'audio', 'flp_file', ['Validated Default V2/V3 layouts: FM/RM, OP-to-filter/FX/OUT/PAN, ratio, SH, 32 harmonics, four-point VOL and filter CUT envelopes; KEY/velocity/Mod X/Y two-point VOL/CUT maps',
         'Arbitrary presets, filter-type/Send-to-next and free envelope topology remain outside the adapter'], 'docs/producer-1.2.md')
+    add('sytrus.performance_mappings', 'audio', 'flp_file', ['Existing two-point operator VOL and filter CUT graphs on the validated Default layouts only',
+        'Raw graph coordinates are not Hz/dB; all four MIDI sources separately native-rendered, full mapped state cold-reopened'], 'docs/sytrus-expression.md')
+    add('audio.preview', 'audio', 'fl_native_batch', ['Addressed timbre, Pattern, Pattern+channel Piano Roll, Mixer/Playlist track and song; owned-session checkpoints supported',
+        'Saved Mixer sidechain dependencies retained; opaque plugin/MIDI dependencies remain unknown; explicit scope and timing receipts',
+        'Optional MP3 listening copy requires installed FFmpeg; source WAV retained; this command does not itself listen'], 'docs/audio-preview.md')
     add('plugin.producer_design', 'audio', 'flp_file', ['Scoped 3xOsc wave/tuning/mix/envelope; Maximus band curves; WaveShaper curve/drive; Delay3 native controls and synced time',
         'Default-derived layouts, not whole-plugin coverage; effect host transactions independently cold-check identities and values'], 'docs/producer-1.2.md')
     add('plugin.embedded_audio', 'audio', 'flp_file', ['Edison/Slicex embedded PCM import/edit/export and cue regions, exact PCM through native save/cold reopen',

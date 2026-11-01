@@ -159,7 +159,7 @@ def patch_playlist(project, edits):
     seen = set()
     for edit in edits:
         allowed = {'arrangement', 'clip_index', 'start_tick', 'length_tick', 'track', 'group', 'muted',
-                   'source_start_tick', 'source_start_ms', 'source_end_ms', 'gain', 'delete', 'duplicate'}
+                   'source_start_tick', 'source_start_ms', 'source_end_ms', 'gain', 'delete', 'duplicate', 'pattern_number'}
         if not isinstance(edit, dict) or set(edit) - allowed or 'clip_index' not in edit:
             raise ValueError('Playlist edit requires clip_index and supported head fields')
         arrangement, index = edit.get('arrangement', 0), edit['clip_index']
@@ -172,6 +172,11 @@ def patch_playlist(project, edits):
         record = records[index]
         data = bytearray(record)
         kind = record_kind(record, channels)
+        if 'pattern_number' in edit:
+            number = edit['pattern_number']
+            if kind != 'pattern' or type(number) is not int or number not in project.patterns():
+                raise ValueError('Pattern retargeting requires an existing Pattern and a Pattern clip')
+            struct.pack_into('<H', data, 6, 20480 + number)
         for field, offset, fmt, low, high in (
             ('start_tick', 0, '<I', 0, 0xffffffff), ('length_tick', 8, '<I', 1, 0xffffffff),
             ('track', 12, '<H', 1, 500), ('group', 14, '<H', 0, 65535)):

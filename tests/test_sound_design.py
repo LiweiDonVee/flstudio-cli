@@ -74,6 +74,13 @@ def test_invalid_values_fail_before_starting_a_worker(tmp_path):
         candidate(Path(task['task_file']),request)
     assert not (tmp_path/'task/candidates/bad').exists()
     assert source.read_bytes()==(tmp_path/'task/original.flp').read_bytes()
+    from flstudio_cli.sytrus_design import apply_design
+    doc=Project.read(source);original=doc.encode()
+    with pytest.raises(ValueError,match='Mapping source'):
+        apply_design(doc,0,{'operators':[{'operator':2,'volume_mappings':[
+            {'source':'mod_x','at_min':.2,'at_max':.8},
+            {'source':'not-a-source','at_min':0,'at_max':1}]}]})
+    assert doc.encode()==original
 
 
 def test_preview_matching_preserves_raw_and_dynamics(tmp_path):

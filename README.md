@@ -6,6 +6,13 @@ and control an addressed FL session through a standalone controller.
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
 
+Current development adds [Sytrus performance mappings](docs/sytrus-expression.md)
+and [addressed audio previews](docs/audio-preview.md): timbre, Pattern, a specific
+Piano Roll, Mixer/Playlist track, or song. The optional
+[DSH listener](integrations/dsh/README.md) sends actual WAV/MP3 bytes to a
+configured native audio model, available to the main agent and its sound-design
+specialist. Signal analysis remains available without that service.
+
 Version 1.2.1 fixes new Automation Clips inheriting an existing clip's mute state
 and documents source-clip timing and rapid pitch analysis. See the
 [patch notes](docs/release-1.2.1.md) and [automation diagnostics](docs/automation-timing.md).
@@ -45,6 +52,8 @@ The sample drums in `examples/audio` are generated for this project.
 Install analysis support with `uv tool install --editable ".[sound-design]"`.
 Use the [specialist Skill](skills/flstudio-sound-design/SKILL.md) with a short
 task handoff; existing tempo, notes and context come from the actual project.
+The [main-agent Skill](skills/flstudio-cli-agent/SKILL.md) covers project context,
+delegation, native listening and apply/undo.
 
 ```powershell
 flstudio sound-design prepare --project excerpt.flp --channel 0 --role bass --brief "Warm defined bass; preserve the kick and lead" --output-dir sound-work

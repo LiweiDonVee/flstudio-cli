@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "status": "documented_plugin_actions_and_unheard_design_hypotheses",
+  "status": "source_attributed_design_hypotheses_with_per_recipe_native_evidence",
   "execution_domain": "Validated saved-state adapters or addressed native host/UI; actual candidate save/cold/audition still required",
   "not_a_cli_request_schema": true,
   "baseline": "sytrus.md: true init contract; Default container plus explicit oscillator, matrix, envelope and FX state",
-  "unit_rule": "ui_percent is displayed knob/slider percent; seconds is an envelope design target; neither is host value_raw or live normalized 0..1",
+  "unit_rule": "ui_percent is displayed knob/slider percent; seconds is an envelope design target; neither is host value_raw or live normalized 0..1; mapping at_min/at_max are native graph y coordinates0..1, not Hz or dB",
   "common_validation": [
     "save new preset/project and record actual version/path",
     "write and independently read back",
@@ -582,6 +582,184 @@
       "cli_examples": [
         "examples/producer/slicex-regions.json"
       ]
+    },
+    {
+      "id": "sytrus-velocity-fm-expression",
+      "word": "力度 表情 明亮 锐利 velocity",
+      "interpretation": "Make harder notes change FM articulation rather than only playback level",
+      "ambiguities": [
+        "harder may mean louder, brighter, shorter or more percussive",
+        "the desired response depends on register and arrangement"
+      ],
+      "mechanism": "Velocity scales a routed FM modulator VOL graph while the carrier and note conditions remain fixed",
+      "sources": [
+        "P01",
+        "P02"
+      ],
+      "preconditions": [
+        "Validated Sytrus Default-family parent with audible OP2→OP1 FM and OP1 output",
+        "Fixed MIDI and a neutral-map baseline"
+      ],
+      "cli_design_request": {
+        "operators": [
+          {
+            "operator": 2,
+            "volume_mappings": [
+              {
+                "source": "velocity",
+                "at_min": 0.15,
+                "at_max": 1
+              }
+            ]
+          }
+        ]
+      },
+      "unit": "Raw graph y0..1; neutral VOL1,1; not a universal amplitude transfer",
+      "expected_change": "Velocity-dependent spectral/FM-index response; output level may also change",
+      "validation": [
+        "Change velocity alone across several notes/registers",
+        "Native save, cold reopen and fixed-context render",
+        "Level-match playback; compare harmonics and attributed listening, not centroid alone"
+      ],
+      "local_evidence": {
+        "status": "native_audio_and_full_state_verified",
+        "host": "FL26.1.6.5639",
+        "date": "2026-11-02",
+        "record": "docs/sytrus-expression.md",
+        "fixture_h3_h1_db": [
+          -11.74,
+          11.07
+        ],
+        "conditions": "velocity32/112; this fixture only"
+      },
+      "fallback": [
+        "Reduce FM depth or map slope when hard notes become unstable",
+        "If output loudness alone is wanted, use appropriate carrier/host level control",
+        "If collisions are rhythmic/register-based, report that to main agent instead of repeatedly adding EQ"
+      ],
+      "aesthetic_status": "Conditional design hypothesis; native listening is attributed model evidence, not a universal preference"
+    },
+    {
+      "id": "sytrus-note-xy-filter-expression",
+      "word": "运动 空灵 明亮 闭合 mod_x mod_y",
+      "interpretation": "Use per-note X/Y to vary filter contour across a fixed phrase",
+      "ambiguities": [
+        "airy can mean filtered upper harmonics, noise, reverb or wide sparse texture",
+        "per-note MOD X is distinct from assuming a host macro binding"
+      ],
+      "mechanism": "Existing two-point Mod X/Y→filter CUT map, with a verified rich carrier→filter→output path",
+      "sources": [
+        "P01",
+        "P02"
+      ],
+      "preconditions": [
+        "Supported Default-family filter map",
+        "Audible operator/filter route and useful host cutoff offsets"
+      ],
+      "cli_design_request": {
+        "filters": [
+          {
+            "filter": 1,
+            "cutoff_mappings": [
+              {
+                "source": "mod_x",
+                "at_min": 0.1,
+                "at_max": 0.9
+              }
+            ]
+          }
+        ]
+      },
+      "unit": "Raw native map y0..1; neutral CUT.5,.5; not Hz",
+      "expected_change": "Per-note filter tone movement, conditional on the other filter controls/maps",
+      "validation": [
+        "Vary only mod_x0/255 and hold other MIDI inputs fixed",
+        "Inspect notes plus map endpoint readback; native save/cold/render",
+        "Repeat with actual note lengths, overlapping notes and fixed accompaniment"
+      ],
+      "local_evidence": {
+        "status": "all_four_sources_native_rendered_and_mapped_candidate_cold_reopened",
+        "host": "FL26.1.6.5639",
+        "date": "2026-11-02",
+        "record": "docs/sytrus-expression.md",
+        "fixture_h3_h1_db": [
+          -13.4,
+          0.96
+        ]
+      },
+      "fallback": [
+        "Check the audio route and cutoff offset before increasing map depth",
+        "Use a reverse map on a second operator for a documented crossfade experiment",
+        "Preserve difference in musical character; do not force all directions into one spectrum"
+      ],
+      "aesthetic_status": "Mechanism measured; musical fit remains a contextual listening choice"
+    },
+    {
+      "id": "sytrus-note-xy-crossfade",
+      "word": "交叉淡化 混合 表情 polyphonic mod_x",
+      "interpretation": "Blend two intentionally different operator paths independently per note",
+      "ambiguities": [
+        "Equal graph coordinates do not imply equal loudness",
+        "Changing operator ratio can change register as well as timbre"
+      ],
+      "mechanism": "Opposite Mod X→operator VOL graphs on two separately audible paths",
+      "sources": [
+        "P01",
+        "P02"
+      ],
+      "preconditions": [
+        "Validated Default-family state with both direct paths audibly routed",
+        "Establish each path alone before blending; avoid unintentionally retaining FM routes"
+      ],
+      "cli_design_request": {
+        "operators": [
+          {
+            "operator": 1,
+            "volume_mappings": [
+              {
+                "source": "mod_x",
+                "at_min": 1,
+                "at_max": 0
+              }
+            ]
+          },
+          {
+            "operator": 2,
+            "volume_mappings": [
+              {
+                "source": "mod_x",
+                "at_min": 0,
+                "at_max": 1
+              }
+            ]
+          }
+        ]
+      },
+      "unit": "Raw0..1 map y; no equal-power or equal-loudness interpolation claim",
+      "expected_change": "Each note can choose/blend a different operator path rather than sharing one global macro position",
+      "validation": [
+        "Render low/high X endpoints individually and with overlapping notes",
+        "Save/cold-reopen the full candidate",
+        "Then calibrate intermediate coordinates and matched-context musical preference"
+      ],
+      "local_evidence": {
+        "status": "native_complete_state_cold_reopen_and_polyphonic_endpoint_audio_verified",
+        "date": "2026-11-02",
+        "record": "docs/sytrus-expression.md",
+        "intended_components_hz": [
+          130.8128,
+          391.9954
+        ],
+        "overlap_vs_single_amplitude_db": [
+          -1.525e-05,
+          2.35e-05
+        ]
+      },
+      "fallback": [
+        "Reduce density or adjust operator level when blend becomes too loud",
+        "Preserve distinct musical choices rather than forcing spectral similarity"
+      ],
+      "aesthetic_status": "Mechanism verified at endpoints; useful timbral path and intermediate blend remain musical design decisions"
     }
   ]
 }

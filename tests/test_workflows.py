@@ -139,3 +139,31 @@ def test_new_automation_does_not_inherit_existing_clip_mute(tmp_path):
         assert added['muted'] is False
         remaining = split_records(next(e.data for _, e in playlist_events(saved)))
         assert [r for r in remaining if struct.unpack_from('<H', r, 6)[0] != new['channel_iid']] == original_records
+
+
+def test_preview_keeps_sidechain_controls_without_other_pattern_audio(tmp_path):
+    from flstudio_cli.audio_preview import prepare_scope, preview
+    from flstudio_cli.entities import edit_pattern
+
+    template, spec = fixture(tmp_path)
+    doc = create_project(spec, template)
+    doc.set_channel(0, {'mixer_track': 1})
+    doc.set_channel(1, {'mixer_track': 2})
+    doc.set_mixer(2, {'sends': [{'to': 1, 'level': 0}]})
+    edit_pattern(doc, {'number': 8, 'clone_from': 7})
+    doc.replace_notes(7, 1, [])
+    doc.set_playlist([{'pattern_number': 7, 'track': 3, 'start_tick': 0, 'length_tick': 768},
+                      {'pattern_number': 8, 'track': 4, 'start_tick': 0, 'length_tick': 768}])
+    source = doc.save(tmp_path/'preview-source.flp')
+    original = source.read_bytes()
+    request = {'scope': 'track', 'kind': 'playlist', 'track': 3}
+    assert preview(source, request, tmp_path/'not-written', dry_run=True)['status'] == 'planned'
+    assert not (tmp_path/'not-written').exists()
+    scope = prepare_scope(doc, request)
+    assert scope['routing']['preserved_control_mixer_tracks'] == [2]
+    assert doc.mixer()[2]['sends'] == [{'to': 1, 'level': 0}]
+    clone = doc.playlist()[1]['pattern_number']
+    assert clone not in (7, 8)
+    assert {n['channel_index'] for n in doc.patterns()[clone]['notes']} == {1}
+    assert doc.patterns()[8]['notes'] == Project.read(source).patterns()[8]['notes']
+    assert source.read_bytes() == original

@@ -338,6 +338,8 @@ def _register_all():
     register_stock_plugins(app, _emit, json_option)
     from .audio_analysis import register as register_audio_analysis
     register_audio_analysis(app, _emit, json_option)
+    from .audio_preview import register as register_audio_preview
+    register_audio_preview(app, _emit, json_option)
 
 
 def _validation_error_type():

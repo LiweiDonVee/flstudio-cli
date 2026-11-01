@@ -24,12 +24,14 @@ PROFILES = (
      'envelope_version': 3, 'volume_header': 2940, 'filter_base':43210, 'filter_stride':6665, 'articulator_stride':812},
 )
 NODE = struct.Struct('<ddfI')
+MAPPING_SOURCES = ('key', 'velocity', 'mod_x', 'mod_y')
 LIMITATIONS = [
     'Only the installed Default.fst family and its FL 26.1.6 native saves are admitted.',
     'FM/RM operator modulation is separate from shared OP-to-filter, FX/OUT sends and PAN; filter-to-filter sends are not matrix edges.',
     'Only the first 32 harmonic coefficient slots are exposed; phase and the remaining waveform data are preserved.',
     'Volume envelope edits retain four points, curve tensions and loop/sustain markers; supplied envelopes enable by default.',
     'Envelope time_raw is the native serialized segment duration, not an asserted seconds value.',
+    'KEY/VEL/MOD X/Y mappings edit existing two-point operator VOL and filter CUT graphs; raw vertical coordinates are not Hz, dB or universal gain.',
     'Structural readback is distinct from native reopen and audible acceptance.',
 ]
 
@@ -123,6 +125,45 @@ def _cutoff_view(profile, raw, number):
             'release_time_raw':points[3][0],'end_level_raw':points[3][1]}
 
 
+def _mapping_at(profile, articulator, source):
+    if source not in MAPPING_SOURCES:
+        raise ValueError('Mapping source must be key, velocity, mod_x or mod_y')
+    return articulator + (304 if profile['envelope_version'] == 2 else 308) + MAPPING_SOURCES.index(source)*80
+
+
+def _mapping_view(profile, raw, articulator, source):
+    at = _mapping_at(profile, articulator, source)
+    if struct.unpack_from('<III', raw, at) != (3, profile['envelope_version'], 2):
+        raise ValueError('Unsupported Sytrus mapping topology; use an existing two-point Default-family graph')
+    points = [NODE.unpack_from(raw, at+12+i*NODE.size) for i in range(2)]
+    if ([p[0] for p in points] != [0., 1.] or
+            any(not all(math.isfinite(v) for v in p[:3]) or not 0 <= p[1] <= 1 for p in points)):
+        raise ValueError('Unsupported Sytrus mapping coordinates')
+    return {'source': source, 'at_min': points[0][1], 'at_max': points[1][1],
+            'tension_raw': points[1][2]}
+
+
+def _mapping_views(profile, raw, articulator):
+    return [_mapping_view(profile, raw, articulator, source) for source in MAPPING_SOURCES]
+
+
+def _write_mappings(profile, raw, articulator, changes):
+    if not isinstance(changes, list) or not changes:
+        raise ValueError('Mappings require a nonempty array of source, at_min and at_max')
+    seen = set()
+    for change in changes:
+        if not isinstance(change, dict) or set(change) != {'source', 'at_min', 'at_max'}:
+            raise ValueError('Each mapping requires source, at_min and at_max')
+        source = change['source']
+        _mapping_view(profile, raw, articulator, source)
+        if source in seen:
+            raise ValueError('Duplicate Sytrus mapping source')
+        seen.add(source)
+        at = _mapping_at(profile, articulator, source)
+        for offset, name in ((20, 'at_min'), (44, 'at_max')):
+            struct.pack_into('<d', raw, at+offset, _number(change[name], 0, 1, 'Mapping '+name))
+
+
 def _view(profile, raw):
     matrix = []
     for mode, start in (('fm', 12), ('rm', 336)):
@@ -148,7 +189,8 @@ def _view(profile, raw):
                 'decay_time_raw': nodes[2][0], 'sustain': nodes[2][1], 'release_time_raw': nodes[3][0],
                 'end_level': nodes[3][1]},
             'volume_envelope_points': [{'time_raw': node[0], 'level': node[1],
-                                       'tension_raw': node[2], 'flags_raw': node[3]} for node in nodes]})
+                                       'tension_raw': node[2], 'flags_raw': node[3]} for node in nodes],
+            'volume_mappings': _mapping_views(profile, raw, base+profile['volume_header'])})
     routes=[]
     for row in range(1,10):
         source=row if row<=6 else f'filter{row-6}'
@@ -164,7 +206,8 @@ def _view(profile, raw):
     return {'profile': profile['name'], 'state_prefix_hex': profile['prefix'].hex(),
             'expanded_state_bytes': len(raw), 'matrix': matrix, 'outputs': outputs, 'operators': operators,
             'routes':routes,'pan':pan,
-            'filters':[{'filter':i,'cutoff_envelope':_cutoff_view(profile,raw,i)} for i in range(1,4)]}
+            'filters':[{'filter':i,'cutoff_envelope':_cutoff_view(profile,raw,i),
+                        'cutoff_mappings':_mapping_views(profile,raw,_filter_header(profile,i))} for i in range(1,4)]}
 
 
 def inspect_design(project: Project, channel: int) -> dict:
@@ -259,10 +302,15 @@ def apply_design(project: Project, channel: int, request: dict) -> dict:
         seen.add(offset);struct.pack_into('<i',raw,offset,_integer(pan['value_raw'],-256,256,'Pan value_raw'))
     used_filters=set()
     for filt in request.get('filters',[]):
-        if not isinstance(filt,dict) or set(filt)!={'filter','cutoff_envelope'}:raise ValueError('Filter design requires filter and cutoff_envelope')
+        if (not isinstance(filt,dict) or 'filter' not in filt or len(filt)<2 or
+                set(filt)-{'filter','cutoff_envelope','cutoff_mappings'}):
+            raise ValueError('Filter design requires filter and cutoff_envelope or cutoff_mappings')
         number=_integer(filt['filter'],1,3,'Filter')
         if number in used_filters:raise ValueError('Duplicate Sytrus filter')
         used_filters.add(number);_cutoff_view(profile,raw,number)
+        if 'cutoff_mappings' in filt:
+            _write_mappings(profile,raw,_filter_header(profile,number),filt['cutoff_mappings'])
+        if 'cutoff_envelope' not in filt:continue
         env=filt['cutoff_envelope'];fields={'attack_time_raw':(1,0),'peak_level_raw':(1,8),'decay_time_raw':(2,0),
             'sustain_level_raw':(2,8),'release_time_raw':(3,0),'end_level_raw':(3,8)}
         if not isinstance(env,dict) or not env or set(env)-set(fields)-{'enabled'}:raise ValueError('Unknown cutoff envelope field')
@@ -278,8 +326,8 @@ def apply_design(project: Project, channel: int, request: dict) -> dict:
         raise ValueError('Sytrus operators requires an array')
     seen_operators = set()
     for change in operators:
-        if not isinstance(change,dict) or set(change)-{'operator','ratio','shape_raw','harmonics','volume_envelope'}:
-            raise ValueError('Operator accepts operator, ratio, shape_raw, harmonics and volume_envelope')
+        if not isinstance(change,dict) or set(change)-{'operator','ratio','shape_raw','harmonics','volume_envelope','volume_mappings'}:
+            raise ValueError('Operator accepts operator, ratio, shape_raw, harmonics, volume_envelope and volume_mappings')
         if set(change) == {'operator'}:
             raise ValueError('Each operator requires at least one design change')
         operator = _integer(change.get('operator'),1,6,'Operator')
@@ -287,6 +335,8 @@ def apply_design(project: Project, channel: int, request: dict) -> dict:
             raise ValueError('Duplicate Sytrus operator')
         seen_operators.add(operator)
         base = profile['operator_base']+(operator-1)*profile['operator_stride']
+        if 'volume_mappings' in change:
+            _write_mappings(profile,raw,base+profile['volume_header'],change['volume_mappings'])
         if 'ratio' in change:
             ratio = _number(change['ratio'],0,64,'Operator ratio')
             if abs(ratio*10000-round(ratio*10000)) > 1e-6:

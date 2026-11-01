@@ -354,14 +354,16 @@ def register(app, emit, json_option):
     @click.option('--key', type=click.Choice(['enter', 'escape', 'up', 'down', 'left', 'right', 'home', 'end', 'tab', 'space', 'backspace', 'delete', 'f7']))
     @click.option('--move', type=int, nargs=2, help='Window pixel X Y from the observed screenshot.')
     @click.option('--click', 'pointer_click', type=int, nargs=2)
+    @click.option('--right-click', 'pointer_right_click', type=int, nargs=2)
     @click.option('--drag', type=int, nargs=4, help='Window pixel X1 Y1 X2 Y2.')
     @click.option('--dry-run', is_flag=True)
     @json_option
-    def input_key(session, observation, key, move, pointer_click, drag, dry_run):
+    def input_key(session, observation, key, move, pointer_click, pointer_right_click, drag, dry_run):
         """Submit addressed input to a captured private-owned window, then verify its effect."""
         from .owned_ui import submit_key, submit_pointer
-        if sum(bool(v) for v in (key, move, pointer_click, drag)) != 1: raise ValueError('Choose exactly one key, move, click or drag')
-        pointer = {'move': move} if move else {'click': pointer_click} if pointer_click else {'drag': [drag[:2], drag[2:]]} if drag else None
+        if sum(bool(v) for v in (key, move, pointer_click, pointer_right_click, drag)) != 1: raise ValueError('Choose exactly one key, move, click, right-click or drag')
+        pointer = ({'move': move} if move else {'click': pointer_click} if pointer_click else
+                   {'right_click': pointer_right_click} if pointer_right_click else {'drag': [drag[:2], drag[2:]]} if drag else None)
         owned = decode_json(session.read_text(encoding='utf-8-sig'))
         frame = decode_json(observation.read_text(encoding='utf-8-sig'))
         if 'data' in frame: frame = frame['data']

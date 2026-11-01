@@ -1,10 +1,10 @@
 # Plugin support and evidence layers
 
 Measured locally on FL Studio Producer **26.1.6.5639**, Windows x64,
-2026-11-01. A plugin being discovered does not imply complete control.
+2026-11-02. A plugin being discovered does not imply complete control.
 
 CLI1.2 additions have native-save/cold-reopen/audio evidence in
-[Producer1.2](../producer-1.2.md): Sytrus OP→filter/FX/OUT/PAN and four-point CUT
+[Producer1.2](../producer-1.2.md): Sytrus OP鈫抐ilter/FX/OUT/PAN and four-point CUT
 envelope; 3xOsc synthesis/VOL envelope; Maximus four band curves; WaveShaper
 curve/drive; Delay3 controls/time; Edison/Slicex embedded PCM/cues; Slide/mono-glide.
 The linked table gives exact per-plugin limits and measured observations.
@@ -36,3 +36,13 @@ but does not establish the exact parameter layout of that nightly.
 
 Read [validation](validation.md) for execution versus listening evidence, and
 [Sytrus implementation details](sytrus.md) for supported raw fields.
+
+
+New development additionally verifies KEY/velocity/Mod X/Y two-point operator
+VOL and filter CUT maps, with separate MIDI-source native renders and an
+8-map full-state cold reopen. See [Sytrus expression](../sytrus-expression.md).
+This does not imply arbitrary modulation or graph topology. Addressed native
+[previews and listening](../audio-preview.md) preserve known Mixer-sidechain
+controls, support all five listening scopes, and expose explicit audio receipts.
+The optional DSH listener has actual native-model WAV/MP3 evidence; it is
+separate from the current DSH conversation transport.
