@@ -1,4 +1,4 @@
-"""Three practical regression checks; native FL exports are checked separately."""
+"""Practical regression checks; native FL exports are checked separately."""
 from pathlib import Path
 import json
 import struct
@@ -117,3 +117,25 @@ def test_unknown_events_and_json_numbers_are_not_silently_corrupted(tmp_path):
             pass
         else:
             raise AssertionError('Invalid numeric/Unicode input was accepted')
+
+
+def test_new_automation_does_not_inherit_existing_clip_mute(tmp_path):
+    from flstudio_cli.automation import create_curve
+    from flstudio_cli.timeline import patch_playlist, playlist_events, split_records
+
+    template, spec = fixture(tmp_path)
+    points = [{'position_beats': 0, 'value': 0.5}, {'position_beats': 4, 'value': 0.45}]
+    for muted in (False, True):
+        doc = create_project(spec, template)
+        create_curve(doc, {'name': 'Existing', 'target': {'kind': 'channel_volume', 'channel': 0},
+                           'points': points})
+        old_clip = next(c for c in doc.playlist() if c['kind'] == 'automation')
+        patch_playlist(doc, [{'clip_index': old_clip['clip_index'], 'muted': muted}])
+        original_records = split_records(next(e.data for _, e in playlist_events(doc)))
+        new = create_curve(doc, {'name': 'Pitch', 'target': {'kind': 'channel_pitch', 'channel': 1},
+                                 'points': points})
+        saved = Project.read(doc.save(tmp_path / f'automation-{muted}.flp'))
+        added = next(c for c in saved.playlist() if c['channel_index'] == new['channel'])
+        assert added['muted'] is False
+        remaining = split_records(next(e.data for _, e in playlist_events(saved)))
+        assert [r for r in remaining if struct.unpack_from('<H', r, 6)[0] != new['channel_iid']] == original_records

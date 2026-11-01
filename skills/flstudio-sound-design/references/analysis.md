@@ -25,6 +25,20 @@ channel slide_raw are not universal seconds mappings. Pitch uses100ms frames
 by default, therefore ±50ms integration, even with10ms hop. Enlarge windows for
 very low notes. Frequency estimates come per channel, avoiding mono cancellation.
 
+For pitch automation, identify the active saved channel/IID at the measurement
+window; a curve on another sample channel cannot bend the current note. Point
+positions are source-clip beats: moving a Pattern excerpt to0 also needs the
+corresponding automation source offset or translated points. First prove a
+large held-note shift on that voice, then measure the small intended gesture.
+Compute cents as `1200*log2(after_hz/before_hz)` on matched voiced frames. Short
+attacks, overlapping voices and modulated effects can blur a few-cent change;
+compare unchanged repeats or isolate the dry voice before declaring failure.
+If a fast glide returns `low_periodicity`, shorten the analysis window using a
+known lower pitch bound while retaining at least three periods at `min_hz`.
+For a demonstrated550–800Hz sax fall,20ms/min_hz200 recovered the movement
+that a50ms window rejected. Keep the confidence threshold and nulls; this is
+an interval-specific resolution choice, not a universal20ms setting.
+
 Read `usability` first: `usable`, `ambiguous`, `unavailable`. Unknown frames stay
 null; never impute them, count zero crossings as pitch on complex voices, or call
 a strong periodicity score proof of monophony. Follow `next_experiment` when

@@ -153,7 +153,7 @@ def create_curve(project, spec, template=None):
     """
     from pathlib import Path
     from .flp import Project, Event, string
-    from .timeline import playlist_events, split_records
+    from .timeline import patch_playlist, playlist_events, split_records
     allowed = {'name', 'target', 'points', 'track', 'start_tick', 'length_tick', 'arrangement', 'template', 'template_channel', 'range_raw'}
     if not isinstance(spec, dict) or set(spec) - allowed or not {'name', 'target', 'points'} <= set(spec):
         raise ValueError('New automation requires name, target, points and optional placement/template fields')
@@ -210,6 +210,9 @@ def create_curve(project, spec, template=None):
     existing = split_records(event.data)
     project.set_playlist([{'channel_index': channel, 'track': spec.get('track', 2),
                            'start_tick': start_tick, 'length_tick': length_tick}], arrangement)
+    # The cloned record may be muted. Activate only the new clip; preserve
+    # the original records, other flags and opaque tails captured above.
+    patch_playlist(project, [{'arrangement': arrangement, 'clip_index': 0, 'muted': False}])
     addition = split_records(event.data)
     event.data = b''.join(sorted(existing + addition, key=lambda r: struct.unpack_from('<I', r)[0]))
     return read_curve(project, channel)
