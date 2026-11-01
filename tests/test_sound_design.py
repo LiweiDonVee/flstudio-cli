@@ -93,3 +93,32 @@ def test_preview_matching_preserves_raw_and_dynamics(tmp_path):
     assert [p.read_bytes() for p in paths]==original
     assert all(analyze(Path(row['preview']))['sample_peak_count']==0 for row in result['files'])
     assert compare(paths[0],paths[0])['pcm_equal']
+
+
+def test_named_articulation_preserves_other_note_bits():
+    from flstudio_cli.note_values import validate,articulation
+    original={'key':36,'start_tick':0,'length_tick':96,'velocity':90,'flags':0x4400,'midi_channel':0x80}
+    marked=validate({**original,'slide':True,'porta':True,'muted':True,'color':5})
+    assert marked['flags']==0x4408 and marked['midi_channel']==0xb5
+    assert articulation(marked)=={'slide':True,'porta':True,'muted':True,'color':5}
+    cleared=validate({**marked,'slide':False,'porta':False,'muted':False,'color':0})
+    assert cleared['flags']==original['flags'] and cleared['midi_channel']==original['midi_channel']
+
+
+def test_signal_diagnostics_separate_gain_timbre_and_unknown_pitch(tmp_path):
+    np=pytest.importorskip('numpy')
+    from flstudio_cli.audio_analysis import analyze
+    t=np.arange(44100)/44100
+    paths=[]
+    for i,s in enumerate((.1*np.sin(2*np.pi*110*t),.3*np.sin(2*np.pi*110*t),
+                          .1*np.sin(2*np.pi*110*t)+.03*np.sin(2*np.pi*330*t),np.zeros_like(t))):
+        p=tmp_path/f'signal-{i}.wav'
+        with wave.open(str(p),'wb') as f:
+            f.setparams((1,2,44100,0,'NONE',''));f.writeframes(np.round(s*32767).astype('<i2').tobytes())
+        paths.append(p)
+    gain=analyze(paths[1],'harmonics',{'fundamental_hz':110},paths[0])
+    color=analyze(paths[2],'harmonics',{'fundamental_hz':110},paths[0])
+    assert gain['observations']['gain_fit'][0]['constant_gain_within_minus60db']
+    assert not color['observations']['gain_fit'][0]['constant_gain_within_minus60db']
+    assert analyze(paths[0],'pitch')['reason_code']=='monophonic_context_not_confirmed'
+    assert analyze(paths[3],'pitch',{'monophonic':True})['usability']=='unavailable'

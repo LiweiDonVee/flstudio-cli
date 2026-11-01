@@ -1,0 +1,38 @@
+{
+  "description": "Low-band dynamic transfer shaping",
+  "effect_designs": [
+    {
+      "design": {
+        "bands": {
+          "low": {
+            "points": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 0.5,
+                "y": 0.32
+              },
+              {
+                "x": 1,
+                "y": 0.5
+              }
+            ]
+          }
+        }
+      },
+      "slot": 0
+    }
+  ],
+  "fx_chain": [
+    {
+      "preset": "C:\\Program Files\\Image-Line\\FL Studio 2026\\Data\\Patches\\Plugin presets\\Effects\\Maximus\\Default.fst",
+      "slot": 0
+    }
+  ],
+  "id": "maximus-low",
+  "mechanisms": [
+    "Explicit low-band compression curve; preserve other bands"
+  ]
+}

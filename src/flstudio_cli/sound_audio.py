@@ -16,10 +16,18 @@ def _numpy():
 
 def load(path):
     np = _numpy()
-    with wave.open(str(path), 'rb') as stream:
-        rate, channels, width = stream.getframerate(), stream.getnchannels(), stream.getsampwidth()
-        frames = stream.getnframes()
-        raw = stream.readframes(frames)
+    try:
+        with wave.open(str(path), 'rb') as stream:
+            rate, channels, width = stream.getframerate(), stream.getnchannels(), stream.getsampwidth()
+            frames = stream.getnframes()
+            raw = stream.readframes(frames)
+    except wave.Error:
+        # Edison/Slicex export their native 32-bit float WAV, which Python's
+        # integer-PCM wave module does not decode.
+        from .sample_editors import decode
+        signal,rate=decode(Path(path).read_bytes())
+        if not len(signal):raise ValueError('Expected nonempty audio')
+        return rate,signal.astype(np.float64)
     if len(raw) != frames * channels * width or not frames:
         raise ValueError('Expected a complete, nonempty PCM WAV')
     if width == 1:

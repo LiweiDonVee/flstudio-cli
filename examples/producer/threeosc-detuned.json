@@ -1,0 +1,26 @@
+{
+  "description": "Saw body plus fine-detuned second oscillator",
+  "generator_design": {
+    "mix2_raw": 64,
+    "mix3_raw": 0,
+    "oscillators": [
+      {
+        "fine_cents": -5,
+        "oscillator": 1,
+        "waveform": "saw"
+      },
+      {
+        "coarse_semitones": 0,
+        "fine_cents": 5,
+        "oscillator": 2,
+        "waveform": "saw"
+      }
+    ]
+  },
+  "id": "detuned-pair",
+  "mechanisms": [
+    "Sawtooth harmonic source",
+    "Two oscillators at same coarse pitch and different fine tuning"
+  ],
+  "parent": "single-sine"
+}

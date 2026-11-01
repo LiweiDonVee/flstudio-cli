@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "documented_plugin_actions_and_unheard_design_hypotheses",
-  "execution_domain": "Real Sytrus UI or a separately verified mapping to its native state/API",
+  "execution_domain": "Validated saved-state adapters or addressed native host/UI; actual candidate save/cold/audition still required",
   "not_a_cli_request_schema": true,
   "baseline": "sytrus.md: true init contract; Default container plus explicit oscillator, matrix, envelope and FX state",
   "unit_rule": "ui_percent is displayed knob/slider percent; seconds is an envelope design target; neither is host value_raw or live normalized 0..1",
@@ -84,9 +84,9 @@
       "fallback": "restore half the cutoff change or use a triangle source; do not automatically boost bass",
       "listening_status": "not_performed",
       "cli_examples": [
-        "examples/sound-design/sytrus-harmonic-pad.json"
+        "examples/producer/sytrus-filter-motion.json"
       ],
-      "local_execution_scope": "The documented internal filter route needs native UI; the example is a separately validated harmonic-source alternative, not a low-pass implementation."
+      "local_execution_scope": "Default-derived OP1→F1→OUT, CUT envelope plus separate native host cutoff/amount, actual native save/cold/audio verified; warmth remains a listening hypothesis."
     },
     {
       "id": "sytrus-bright-two-operator-fm",
@@ -396,6 +396,192 @@
         "examples/sound-design/sytrus-rm-bass.json"
       ],
       "local_execution_scope": "Operator RM is implemented and rendered. RM sidebands are not granular synthesis and do not establish perceived grain."
+    },
+    {
+      "id": "native-slide-glide",
+      "word": "滑音 Slide portamento",
+      "interpretation": "Continuous pitch motion suited to the actual native voice and note overlap",
+      "mechanism": "Same-color Slide targeting a held note, or overlapping ordinary notes in native Mono mode",
+      "sources": [
+        "P11",
+        "P12"
+      ],
+      "steps": [
+        {
+          "action": "write_named_note_articulation",
+          "slide": true,
+          "color": 0,
+          "timing": "Slide length is transition duration; retain sounding base note"
+        },
+        {
+          "action": "alternative_channel_mode",
+          "polyphony": {
+            "mono": true,
+            "porta": true,
+            "slide_raw": 1660
+          },
+          "unit": "nonlinear native0..1660, not ms"
+        },
+        {
+          "action": "render_dry_solo_and_measure",
+          "purpose": "pitch",
+          "request": {
+            "monophonic": true,
+            "min_hz": 40,
+            "max_hz": 400
+          }
+        }
+      ],
+      "expected": "Intermediate F0 between fixed endpoints; different-color Slide must not bend the base voice",
+      "validation": "Real native Sytrus and3xOsc save/cold/audio; compare step/Slide/color controls; frame uncertainty retained",
+      "failure": "No sounding same-color voice, plugin does not support native Slide, wrong raw time, or multi-voice F0 ambiguity",
+      "fallback": "Inspect notes articulation and channel modes; isolate one voice. Use plugin-native glide or pitch automation for VST rather than assuming native flags.",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/producer/slide-notes.json",
+        "examples/producer/portamento-candidate.json"
+      ],
+      "limitations": [
+        "Mono itself glides overlaps; marked-porta examples do not isolate the marker necessity. Raw keys can be different octaves across engines."
+      ]
+    },
+    {
+      "id": "distortion-versus-gain",
+      "word": "厚 饱和 温暖 失真",
+      "interpretation": "Nonlinear harmonic change rather than merely louder output",
+      "mechanism": "Transfer-curve knee inside the actual driven amplitude range",
+      "sources": [
+        "P07"
+      ],
+      "steps": [
+        {
+          "action": "capture_unchanged_dry_reference_and_repeat"
+        },
+        {
+          "action": "edit_curve_drive",
+          "example": "examples/producer/waveshaper-saturation.json"
+        },
+        {
+          "action": "audio_analyze",
+          "purpose": "harmonics",
+          "request": {
+            "start_seconds": 0.1,
+            "end_seconds": 0.4,
+            "fundamental_hz": 65.406,
+            "harmonics": 8
+          }
+        },
+        {
+          "action": "compare_rms_matched_context_without_changing_synthesis_drive"
+        }
+      ],
+      "expected": "Gain-compensated residual and relative harmonics change beyond unchanged-repeat differences",
+      "validation": "Real initial curve was only+12.34dB gain/residual−74.19dB; revised reachable knee gave residual−7.78dB and changed Hn/H1",
+      "failure": "Only louder; phase/latency/randomness confounds residual; harshness/aliasing not established by one scalar",
+      "fallback": "Restore baseline, bring knee into range or use gentler curve; repeat fixed note and actual context before selecting",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/producer/waveshaper-saturation.json",
+        "examples/producer/analyze-harmonics.json"
+      ]
+    },
+    {
+      "id": "delay3-rhythmic-space",
+      "word": "空灵 空间 回声",
+      "interpretation": "Rhythmic repeated space without occupying every rest",
+      "mechanism": "Synced echoes, feedback decay and alternating stereo routing",
+      "sources": [
+        "P08"
+      ],
+      "steps": [
+        {
+          "action": "set_time_steps",
+          "value": 3,
+          "unit": "sixteenth steps"
+        },
+        {
+          "action": "bounded_wet_feedback_and_pan",
+          "example": "examples/producer/delay3.json"
+        },
+        {
+          "action": "render_isolated_pulse_then_actual_phrase"
+        },
+        {
+          "action": "audio_analyze",
+          "purpose": "delay",
+          "request": {
+            "expected_delay_seconds": 0.375
+          }
+        }
+      ],
+      "expected": "Echo spacing matches musical grid; controlled stereo repeats and tails",
+      "validation": "At120BPM three steps expected375ms, measured374.15ms with4.99ms RMS frames; save/cold state and native context WAV retained",
+      "failure": "Dense input hides echo spacing, self-oscillation, tails mask subsequent parts or mono loses definition",
+      "fallback": "Measure an isolated pulse; reduce feedback/wet or change rhythmic spacing; report arrangement conflicts instead of changing protected parts",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/producer/delay3.json",
+        "examples/producer/analyze-delay.json"
+      ]
+    },
+    {
+      "id": "threeosc-short-pluck",
+      "word": "拨弦 紧 短促 pluck",
+      "interpretation": "A defined short onset and decaying body that leaves actual rhythmic gaps",
+      "mechanism": "Native amplifier envelope, optionally detuned oscillator body",
+      "sources": [
+        "P03",
+        "C03"
+      ],
+      "steps": [
+        {
+          "action": "native_save_legacy_factory_then_edit",
+          "example": "examples/producer/threeosc-pluck.json"
+        },
+        {
+          "action": "audio_analyze",
+          "purpose": "envelope",
+          "timing": "derive actual note-off/next-on from PPQ and BPM"
+        }
+      ],
+      "expected": "Release occupancy fits the actual next-note interval; oscillator structure remains editable",
+      "validation": "Native sine/detuned/pluck variants saved/cold/rendered; pluck decays below threshold before actual note-off in local phrase",
+      "failure": "Wrong host units, clicks, long tails or losing short-note audibility",
+      "fallback": "Small nonzero attack, change decay rather than more EQ; repeat low/mid/high register and fixed context",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/producer/threeosc-pluck.json"
+      ]
+    },
+    {
+      "id": "slicex-phrase-slices",
+      "word": "切片 颗粒 重排 texture",
+      "interpretation": "Playable distinctly sourced regions, not a single sample pitched to simulate every slice",
+      "mechanism": "Embedded native PCM and cue regions with verified ordered triggers",
+      "sources": [
+        "P09",
+        "P10"
+      ],
+      "steps": [
+        {
+          "action": "import_audio_and_regions",
+          "example": "examples/producer/slicex-regions.json"
+        },
+        {
+          "action": "render_keys60_61_62_and_compare_source_regions"
+        },
+        {
+          "action": "export_embedded_wav_and_cold_restore"
+        }
+      ],
+      "expected": "Different triggers select intended source regions and preserve complete sample/articulation state",
+      "validation": "Real60/61/62 yielded source-region65.4/130.8/98Hz; exact PCM/cue native saved/cold checks",
+      "failure": "Custom saved articulator/map differs from expected import keys; region metadata alone cannot observe trigger bindings",
+      "fallback": "Use Default-derived ordered import and render each key; preserve custom maps for native UI/capture rather than overwriting unknown state",
+      "listening_status": "not_performed",
+      "cli_examples": [
+        "examples/producer/slicex-regions.json"
+      ]
     }
   ]
 }

@@ -1,0 +1,51 @@
+{
+  "description": "Independent bright onset settling into a filtered body",
+  "id": "filter-envelope",
+  "mechanisms": [
+    "Enabled filter CUT envelope",
+    "Separate amplitude and spectral envelopes"
+  ],
+  "parent": "harmonic-init",
+  "sytrus": [
+    {
+      "param": "filter1.cutoff",
+      "value_raw": 60
+    },
+    {
+      "param": "filter1.cutoff_envelope",
+      "value_raw": 230
+    }
+  ],
+  "sytrus_design": {
+    "filters": [
+      {
+        "cutoff_envelope": {
+          "attack_time_raw": 0.004,
+          "decay_time_raw": 0.18,
+          "enabled": true,
+          "peak_level_raw": 1.0,
+          "release_time_raw": 0.08,
+          "sustain_level_raw": 0.15
+        },
+        "filter": 1
+      }
+    ],
+    "routes": [
+      {
+        "source": 1,
+        "target": "out",
+        "value_raw": 0
+      },
+      {
+        "source": 1,
+        "target": "filter1",
+        "value_raw": 256
+      },
+      {
+        "source": "filter1",
+        "target": "out",
+        "value_raw": 256
+      }
+    ]
+  }
+}

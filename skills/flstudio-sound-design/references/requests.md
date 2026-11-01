@@ -50,7 +50,10 @@ Additional candidate sections are `sytrus` (existing integer host overrides),
 same raw level field as project editing), `channel_settings` (existing grouped
 envelope/polyphony/filter settings),
 `fx_chain` (complete target-insert slots), `effect_params` (slot/param/value or
-value_raw), and `resources` (existing external files to retain). Only the target
+value_raw), `generator_design` (scoped 3xOsc/Slicex),
+`effect_designs:[{slot,design}]` (scoped native effects),
+`effect_host_params:[{slot,param,value,expect?}]` (normalized0..1 host writes),
+and `resources` (existing external files to retain). Only the target
 channel and its exclusive insert may change. See the native Sytrus guide for
 matrix direction, raw ranges, and supported envelope layouts.
 

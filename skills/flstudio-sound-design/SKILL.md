@@ -9,7 +9,7 @@ Deliver editable native plugin state plus solo and actual-context audio. A usefu
 candidate has a musical purpose, a distinct synthesis hypothesis, and evidence
 that its full saved state survives reopening. Parameter names and host echoes
 alone do not establish that evidence.
-Requires flstudio-cli 1.1.0+; PCM analysis uses its optional `sound-design` extra.
+Requires flstudio-cli 1.2.0+; PCM analysis uses its optional `sound-design` extra.
 
 ## Main-agent handoff
 
@@ -72,7 +72,11 @@ the dedicated sound-design preset. Use `send_message` for revisions and
    writes constant-gain RMS-matched solo/context previews with peak headroom.
    This is an engineering level match, not LUFS or perceived-loudness equality.
    Keep MIDI/render conditions fixed; randomness is observed through repeats.
-7. Use actual listening or an available audio-capable evaluator. If none is
+7. For a specific uncertainty use `audio analyze --purpose pitch|envelope|harmonics|delay|overview`
+   and [signal experiment methods](references/analysis.md). Choose a small actual
+   interval and controlled reference; do not dump full frame arrays into chat.
+   Read `usability`/`reason_code` before interpreting a number. Null/ambiguous
+   pitch is not a zero or a measurement to fill in. Use actual listening or an available audio-capable evaluator. If none is
    available, state `listening: not_performed`; recommend only a provisional
    design hypothesis and give the listener matched previews. Do not claim that
    a candidate sounds more natural because its centroid or a model score moved.
@@ -132,3 +136,5 @@ the precondition. To continue editing the chosen result, prepare a new task from
 
 Read [references/requests.md](references/requests.md) for request/result shapes
 and [references/sytrus.md](references/sytrus.md) for actual deep Sytrus operations.
+For 3xOsc, Maximus, WaveShaper/Delay3, Edison/Slicex and native Slide/portamento,
+read [Producer operations](references/producer-plugins.md) only when needed.

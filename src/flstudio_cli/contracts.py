@@ -34,12 +34,19 @@ class Result(Contract):
         return self
 
 
-from .note_values import FIELDS as NOTE_FIELDS
+from .note_values import FIELDS as NOTE_FIELDS, normalize_articulation
 
-NoteInput = create_model('NoteInput', __base__=Contract, **{
+
+class NoteContract(Contract):
+    @model_validator(mode='before')
+    @classmethod
+    def articulation_bits(cls,value):
+        return normalize_articulation(value)
+
+NoteInput = create_model('NoteInput', __base__=NoteContract, **{
     name: (int, Field(default=default, ge=low, le=high))
     for name, (default, low, high) in NOTE_FIELDS.items()
-})
+}, slide=(bool|None,None),porta=(bool|None,None),muted=(bool|None,None),color=(int|None,Field(default=None,ge=0,le=15)))
 
 
 class NotesReplaceRequest(Contract):

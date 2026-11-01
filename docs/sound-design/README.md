@@ -5,6 +5,12 @@ several editable sounds and solo/context auditions, apply a choice, undo it,
 and hand it back for revision. Sytrus is the primary deep adapter; the generic
 host path was separately exercised with Surge XT.
 
+CLI1.2 adds scoped Producer operations (3xOsc, Maximus, WaveShaper/Delay3,
+Edison/Slicex), deep Sytrus filter/FX/PAN routes and CUT envelopes, and native
+Slide/mono-portamento. Read [exact scope/evidence](../producer-1.2.md).
+For agents without hearing, use [question-led signal methods](../audio-analysis.md)
+and `audio analyze`; numerical features are not a listening score.
+
 Install with `uv tool install --editable ".[sound-design]"`. The extra adds
 NumPy for small PCM/STFT observations, not an audio model. FL Studio, plugins,
 licenses and the CLI controller remain local requirements. Prepare a saved,

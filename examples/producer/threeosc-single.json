@@ -1,0 +1,19 @@
+{
+  "description": "One sine oscillator reference",
+  "generator_design": {
+    "mix2_raw": 0,
+    "mix3_raw": 0,
+    "oscillators": [
+      {
+        "coarse_semitones": 0,
+        "fine_cents": 0,
+        "oscillator": 1,
+        "waveform": "sine"
+      }
+    ]
+  },
+  "id": "single-sine",
+  "mechanisms": [
+    "Only oscillator1 retained"
+  ]
+}

@@ -1,5 +1,10 @@
 # Sytrus：从本机 Default 设计可实际加载的音色
 
+1.2 已补充 OP→滤波器、OP/filter→FX/OUT、PAN 与四点 CUT 包络；具体请求见
+[已实测 Producer 能力](../producer-1.2.md) 和 Skill 的
+[Sytrus 配方](../../skills/flstudio-sound-design/references/sytrus.md)。
+下文保留1.1初始算子校准记录；滤波/FX路由不再是未实现项。
+
 `flstudio_cli.sytrus_design` 补充宿主参数目录之外的受控能力：FM/RM 算子矩阵、直接输出、六算子 ratio、SH 波形变形、前32个谐波的线性系数、启用并编辑四点音量包络。它修改工程副本中的真实 Sytrus state；不是宿主 initial-control 覆盖或屏幕旋钮模拟。
 
 本机基准是 FL Studio Producer 26.1.6.5639，2026-11-01。原生界面配对、独立进程重开和 WAV 测量证据保存在不入包的 `.lab/sound-design/sytrus-adapter/`。接口使用标准库 `zlib`、`struct`，不增加运行时依赖。
@@ -55,7 +60,7 @@
 
 `value_raw` 为整数 -256..256，256 是实际界面上限。负值保留原生极性；不要把符号解释为亮度评分。`source:1,target:"out"` 或 `row:1,column:"out"` 控制 OP1 直接输出，统一写 FM 表。RM 的 OUT 不作为另一条独立输出开放。
 
-已实测方向：仅 OP1→OUT、OP2 ratio=3 时，FM 行1列2产生新的边带；行2列1保持 OP1 纯音。RM 同样对照确认。当前接口仅暴露6×6算子区域及算子直接 OUT；F1–F3、PAN、FX 发送和串行滤波路由不在此版映射内。
+已实测方向：仅 OP1→OUT、OP2 ratio=3 时，FM 行1列2产生新的边带；行2列1保持 OP1 纯音。RM 同样对照确认。`matrix`保留6×6算子区域及直接OUT；1.2的`routes`另行覆盖OP→F1–F3与OP/filter→FX/OUT，`pan`覆盖算子/滤波器PAN。串行滤波Send to Next不作为任意矩阵边写入。
 
 ## 算子和包络
 

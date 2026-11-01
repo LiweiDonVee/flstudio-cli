@@ -18,15 +18,15 @@ INSTALL = Path('C:/Program Files/Image-Line/FL Studio 2026')
 PROFILES = (
     {'name': 'factory-default-legacy', 'prefix': bytes.fromhex('13000000'),
      'size': 64854, 'operator_base': 1443, 'operator_stride': 6976,
-     'envelope_version': 2, 'volume_header': 2936},
+     'envelope_version': 2, 'volume_header': 2936, 'filter_base':43299, 'filter_stride':6633, 'articulator_stride':808},
     {'name': 'fl26-native-default', 'prefix': bytes.fromhex('03001900'),
      'size': 64871, 'operator_base': 1210, 'operator_stride': 7000,
-     'envelope_version': 3, 'volume_header': 2940},
+     'envelope_version': 3, 'volume_header': 2940, 'filter_base':43210, 'filter_stride':6665, 'articulator_stride':812},
 )
 NODE = struct.Struct('<ddfI')
 LIMITATIONS = [
     'Only the installed Default.fst family and its FL 26.1.6 native saves are admitted.',
-    'Matrix operator cells and direct OUT are supported; filter routing, PAN and FX cells are not exposed.',
+    'FM/RM operator modulation is separate from shared OP-to-filter, FX/OUT sends and PAN; filter-to-filter sends are not matrix edges.',
     'Only the first 32 harmonic coefficient slots are exposed; phase and the remaining waveform data are preserved.',
     'Volume envelope edits retain four points, curve tensions and loop/sustain markers; supplied envelopes enable by default.',
     'Envelope time_raw is the native serialized segment duration, not an asserted seconds value.',
@@ -103,6 +103,26 @@ def _decode(blob):
     return profile, bytearray(raw)
 
 
+def _filter_header(profile, number):
+    return profile['filter_base']+(number-1)*profile['filter_stride']+169+2*profile['articulator_stride']
+
+
+def _cutoff_view(profile, raw, number):
+    at=_filter_header(profile,number)
+    expected=struct.pack('<iiffiii',profile['envelope_version'],0,1.,1.,1,profile['envelope_version'],4)
+    scales=struct.unpack_from('<ff',raw,at+8)
+    if (raw[at:at+8]!=expected[:8] or raw[at+16:at+28]!=expected[16:] or
+            any(not math.isfinite(v) or not 0<=v<=2 for v in scales) or struct.unpack_from('<i',raw,at+128)[0] not in (0,-1)):
+        raise ValueError('Unsupported Sytrus filter cutoff envelope layout; use the calibrated Default family')
+    points=[NODE.unpack_from(raw,at+28+i*NODE.size) for i in range(4)]
+    if any(not all(math.isfinite(v) for v in p[:3]) or not 0<=p[0]<=10000 or not 0<=p[1]<=1 for p in points):
+        raise ValueError('Sytrus cutoff envelope is outside the calibrated four-point layout')
+    return {'enabled':bool(struct.unpack_from('<i',raw,at+128)[0]),'host_scale_raw':list(scales),
+            'attack_time_raw':points[1][0],'peak_level_raw':points[1][1],
+            'decay_time_raw':points[2][0],'sustain_level_raw':points[2][1],
+            'release_time_raw':points[3][0],'end_level_raw':points[3][1]}
+
+
 def _view(profile, raw):
     matrix = []
     for mode, start in (('fm', 12), ('rm', 336)):
@@ -129,8 +149,22 @@ def _view(profile, raw):
                 'end_level': nodes[3][1]},
             'volume_envelope_points': [{'time_raw': node[0], 'level': node[1],
                                        'tension_raw': node[2], 'flags_raw': node[3]} for node in nodes]})
+    routes=[]
+    for row in range(1,10):
+        source=row if row<=6 else f'filter{row-6}'
+        for column,target in ((8,'fx'),(9,'out')):
+            value=struct.unpack_from('<i',raw,12+((row-1)*9+column-1)*4)[0]
+            if value:routes.append({'source':source,'target':target,'value_raw':value})
+        if row>=7:
+            for column in range(1,7):
+                value=struct.unpack_from('<i',raw,12+((row-1)*9+column-1)*4)[0]
+                if value:routes.append({'source':column,'target':source,'value_raw':value})
+    pan=[{'source':row if row<=6 else f'filter{row-6}',
+          'value_raw':struct.unpack_from('<i',raw,12+((row-1)*9+6)*4)[0]} for row in range(1,10)]
     return {'profile': profile['name'], 'state_prefix_hex': profile['prefix'].hex(),
-            'expanded_state_bytes': len(raw), 'matrix': matrix, 'outputs': outputs, 'operators': operators}
+            'expanded_state_bytes': len(raw), 'matrix': matrix, 'outputs': outputs, 'operators': operators,
+            'routes':routes,'pan':pan,
+            'filters':[{'filter':i,'cutoff_envelope':_cutoff_view(profile,raw,i)} for i in range(1,4)]}
 
 
 def inspect_design(project: Project, channel: int) -> dict:
@@ -161,8 +195,8 @@ def apply_design(project: Project, channel: int, request: dict) -> dict:
     edges are equivalent; target='out' controls the source operator's direct
     output in the FM table. A native value of 256 is the calibrated full knob.
     """
-    if not isinstance(request, dict) or not request or set(request)-{'init','preset','matrix','operators'}:
-        raise ValueError('Sytrus design accepts init, optional local preset, matrix and operators')
+    if not isinstance(request, dict) or not request or set(request)-{'init','preset','matrix','operators','routes','pan','filters'}:
+        raise ValueError('Sytrus design accepts init, optional local preset, matrix, operators, shared routes/pan and filters')
     if 'init' in request and type(request['init']) is not bool:
         raise ValueError('Sytrus init must be a boolean')
     if request.get('preset') is not None and not request.get('init'):
@@ -204,6 +238,41 @@ def apply_design(project: Project, channel: int, request: dict) -> dict:
             raise ValueError('Duplicate Sytrus matrix cell')
         seen.add(offset)
         struct.pack_into('<i', raw, offset, value)
+    def source_row(source):
+        if source in ('filter1','filter2','filter3'):return 6+int(source[-1])
+        return _integer(source,1,6,'Route source')
+    for route in request.get('routes',[]):
+        if not isinstance(route,dict) or set(route)!={'source','target','value_raw'}:
+            raise ValueError('A shared route requires source, target and value_raw')
+        row=source_row(route['source']);target=route['target']
+        if target in ('out','fx'):column=9 if target=='out' else 8
+        elif target in ('filter1','filter2','filter3') and row<=6:
+            column,row=row,6+int(target[-1])
+        else:raise ValueError('Shared routes support OP-to-filter and OP/filter-to-FX/OUT; filter-to-filter uses Send to Next, not the matrix')
+        offset=12+((row-1)*9+column-1)*4
+        if offset in seen:raise ValueError('Duplicate Sytrus route/matrix cell')
+        seen.add(offset);struct.pack_into('<i',raw,offset,_integer(route['value_raw'],-256,256,'Route value_raw'))
+    for pan in request.get('pan',[]):
+        if not isinstance(pan,dict) or set(pan)!={'source','value_raw'}:raise ValueError('Pan requires source and value_raw')
+        offset=12+((source_row(pan['source'])-1)*9+6)*4
+        if offset in seen:raise ValueError('Duplicate Sytrus pan cell')
+        seen.add(offset);struct.pack_into('<i',raw,offset,_integer(pan['value_raw'],-256,256,'Pan value_raw'))
+    used_filters=set()
+    for filt in request.get('filters',[]):
+        if not isinstance(filt,dict) or set(filt)!={'filter','cutoff_envelope'}:raise ValueError('Filter design requires filter and cutoff_envelope')
+        number=_integer(filt['filter'],1,3,'Filter')
+        if number in used_filters:raise ValueError('Duplicate Sytrus filter')
+        used_filters.add(number);_cutoff_view(profile,raw,number)
+        env=filt['cutoff_envelope'];fields={'attack_time_raw':(1,0),'peak_level_raw':(1,8),'decay_time_raw':(2,0),
+            'sustain_level_raw':(2,8),'release_time_raw':(3,0),'end_level_raw':(3,8)}
+        if not isinstance(env,dict) or not env or set(env)-set(fields)-{'enabled'}:raise ValueError('Unknown cutoff envelope field')
+        enabled=env.get('enabled',True)
+        if type(enabled) is not bool:raise ValueError('Cutoff envelope enabled must be boolean')
+        at=_filter_header(profile,number);struct.pack_into('<i',raw,at+128,-1 if enabled else 0)
+        for key,value in env.items():
+            if key=='enabled':continue
+            point,delta=fields[key]
+            struct.pack_into('<d',raw,at+28+point*NODE.size+delta,_number(value,0,10000 if delta==0 else 1,'Cutoff '+key))
     operators = request.get('operators', [])
     if not isinstance(operators, list):
         raise ValueError('Sytrus operators requires an array')

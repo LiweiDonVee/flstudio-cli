@@ -3,12 +3,18 @@
 Measured locally on FL Studio Producer **26.1.6.5639**, Windows x64,
 2026-11-01. A plugin being discovered does not imply complete control.
 
+CLI1.2 additions have native-save/cold-reopen/audio evidence in
+[Producer1.2](../producer-1.2.md): Sytrus OP→filter/FX/OUT/PAN and four-point CUT
+envelope; 3xOsc synthesis/VOL envelope; Maximus four band curves; WaveShaper
+curve/drive; Delay3 controls/time; Edison/Slicex embedded PCM/cues; Slide/mono-glide.
+The linked table gives exact per-plugin limits and measured observations.
+
 | Layer / plugin | Observation | Reliable edits actually exercised | Sound and restoration | Boundaries |
 |---|---|---|---|---|
 | Sytrus Default family | Full opaque state plus validated native-field inspection; host parameter catalog is separate | Six-operator FM/RM routes and direct OUT, ratio, SH, first 32 harmonic coefficients, enabled four-point VOL envelope; selected unison/level host overrides | Matrix direction, frequency, harmonic amplitudes and envelope changes calibrated with native WAV; bass/lead/pad candidates saved, cold-reopened and rendered | Only two anchored Default layouts: factory V2 and FL26-native V3. Arbitrary factory/user layouts rejected; not a general Sytrus decoder |
-| Sytrus unsupported state | Plugin identity, opaque full-state preservation and host discovery | Existing host-exposed controls or native UI/capture | A candidate still requires actual save/reopen and audio checks | Filters/FX routing, arbitrary envelope topology, custom phases, full modulation/arp/internal resource editing are outside the deep adapter |
+| Sytrus unsupported state | Plugin identity, opaque full-state preservation and host discovery | Existing host-exposed controls or native UI/capture | A candidate still requires actual save/reopen and audio checks | Arbitrary envelope topology, filter types/Send-to-next, custom phases, full modulation/arp/internal resource editing are outside the deep adapter |
 | Surge XT VST3 1.4 local build | 918 named parameters observed; physical display values read separately | Selected Classic/Sine oscillator type/shape, FM/RM mode, mixer/mute, unison, amp envelopes, filters, routing, VCA/global level | Three roles; independent pad exploration and continuation; requested values checked after cold reload, full state retained, actual WAV repeated | This is a tested subset, not 918 verified writable controls. Enums quantize; changing oscillator type can reset dependent controls. Generic API does not reveal all modulation routes/assets |
-| 3x Osc | 114 host entries observed | Discovery check only in this work | Probe native save only | No sound-design acceptance claim for this plugin |
+| 3x Osc | Typed factory/native state, host catalog separate | Wave/tuning/mix and native VOL envelope; see Producer1.2 for per-layout fields | Real sine/detuned/pluck and Slide/glide states saved/cold reopened/rendered | Default-derived layouts; sample waveform and arbitrary hidden host state not covered |
 | Fruity Reeverb 2 | Existing saved parameter profile and complete slot state | Low-wet lead insert and decay; complete FX transfer/undo | Native lead audio and saved/reopened slot state exercised | Existing profile scope only; not a claim for arbitrary native effects |
 | Other installed generators/effects | Preset/module identity and host discovery when the host exposes them | Normalized host writes with independent addressed readback | Per-candidate native checkpoint and cold-reopen/audio evidence required | Hidden controls need a scoped adapter or native UI; unsupported writes remain unresolved |
 

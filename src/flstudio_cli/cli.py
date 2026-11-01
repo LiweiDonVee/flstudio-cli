@@ -334,6 +334,10 @@ def _register_all():
     register_score_transforms(app.commands['notes'], _emit, json_option)
     from .sound_design import register as register_sound_design
     register_sound_design(app, _emit, json_option)
+    from .stock_plugins import register as register_stock_plugins
+    register_stock_plugins(app, _emit, json_option)
+    from .audio_analysis import register as register_audio_analysis
+    register_audio_analysis(app, _emit, json_option)
 
 
 def _validation_error_type():

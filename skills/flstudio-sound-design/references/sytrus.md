@@ -26,8 +26,9 @@ Candidate example:
 
 - `source:2,target:1` means OP2 modulates OP1. Equivalently row1/column2.
   `mode` is `fm` or `rm`; both matrices coexist. Raw depth is -256..256.
-  `source:1,target:"out"` sets direct OP1 output. Filter/PAN/FX matrix cells
-  are not exposed by this adapter.
+  `source:1,target:"out"` sets direct OP1 output. For shared filter/FX/OUT use
+  `routes`; for source PAN use `pan`, as below. Filter-to-filter Send to Next is
+  separate and not implemented as an arbitrary matrix edge.
 - `ratio` is 0..64 with four decimal places. On the tested host, Note.key36
   ratio1/2 produced 65.441/130.882Hz. Fix the actual notes and check the output;
   do not assume another DAW's octave labels.
@@ -57,3 +58,37 @@ still apply; a successful raw-state edit alone is not the audio proof.
 Sources and design hypotheses are searchable with `sound-design knowledge`.
 The full maintained adapter evidence is `docs/sound-design/sytrus.md` in the
 CLI repository; measured cases are under `.lab/sound-design/sytrus-adapter`.
+
+## Routed filter movement (1.2)
+
+This is a modification of a Default-derived carrier candidate, not a standalone
+init that sets every synthesis field. Host filter cutoff/envelope amount and
+chorus controls are separate from the native envelope/routing structure:
+
+```json
+{
+  "id":"filter-motion","parent":"carrier",
+  "description":"Carrier through a moving low-pass body",
+  "mechanisms":["OP1 to Filter1","independent cutoff envelope"],
+  "sytrus_design":{
+    "routes":[
+      {"source":1,"target":"out","value_raw":0},
+      {"source":1,"target":"filter1","value_raw":256},
+      {"source":"filter1","target":"out","value_raw":256}
+    ],
+    "filters":[{"filter":1,"cutoff_envelope":{"enabled":true,"attack_time_raw":0.004,"peak_level_raw":1,"decay_time_raw":0.18,"sustain_level_raw":0.15,"release_time_raw":0.08}}]
+  },
+  "sytrus":[{"param":"filter1.cutoff","value_raw":60},{"param":"filter1.cutoff_envelope","value_raw":230}]
+}
+```
+
+Operator source numbers1..6 and string sources `filter1|filter2|filter3` are
+explicit. Valid destinations depend on source: operators may send to filters;
+operators/filters may send to `fx|out`. Values−256..256. PAN is
+`"pan":[{"source":"filter1","value_raw":-192}]`. To use internal chorus,
+route Filter1 out0/fx256, then set existing `chorus.order/volume/depth/spread`
+host controls. These branches were saved/cold-reopened/rendered in real FL.
+Envelope levels0..1 are normalized articulator coordinates, not cutoff Hz;
+native scales controlled by the host envelope-amount knob are reported separately.
+Arbitrary filter type, free-point envelopes and all internal effects are not
+claimed. Compare actual fixed context and check mono before choosing a wider FX.

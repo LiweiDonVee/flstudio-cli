@@ -6,7 +6,10 @@ and control an addressed FL session through a standalone controller.
 Windows x64, Python 3.12+, tested with FL Studio Producer **26.1.6.5639**.
 The project does not bundle FL Studio, its factory templates or plugins.
 
-Version 1.1.0 adds delegated plugin sound design: guarded deep Sytrus editing,
+Version 1.2.0 deepens Sytrus routing/filter movement, adds scoped Producer
+plugin designs and native Slide/glide, with question-led signal tools for
+agents without hearing. See [tested Producer scope](docs/producer-1.2.md) and
+[analysis methods](docs/audio-analysis.md). Delegated sound design retains
 isolated candidates, actual-context auditions and recoverable complete states.
 See the [sound-design workflow](docs/sound-design/README.md),
 [plugin support matrix](docs/sound-design/support-matrix.md) and

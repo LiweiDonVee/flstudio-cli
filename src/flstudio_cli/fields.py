@@ -203,6 +203,8 @@ def set_channel_settings(project, channel, changes):
             if name == 'layer' and events[21].data[0] != 3: raise ValueError('Layer flags require a Layer channel')
             if not isinstance(values, dict) or set(values) - set(SETTINGS[name]): raise ValueError('Unknown channel setting')
             for key, value in values.items():
+                if name == 'polyphony' and key == 'slide_raw' and (type(value) is not int or not 0 <= value <= 1660):
+                    raise ValueError('FL26 slide_raw must be integer 0..1660; this nonlinear native control is not milliseconds')
                 eid, *field = SETTINGS[name][key]
                 if eid not in events: raise ValueError('Channel field event is absent')
                 events[eid].data = patch(events[eid].data, field, value)

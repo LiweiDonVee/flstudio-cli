@@ -77,11 +77,15 @@ def transform(project, spec):
                 row[0] = max(0, row[0] + rng.randint(-timing, timing))
             elif op == 'set':
                 values = operation['values']
-                if not isinstance(values, dict) or set(values) - (set(fields) | {'slide'}): raise ValueError('Unknown note property')
+                if not isinstance(values, dict) or set(values) - (set(fields) | {'slide','porta','muted','color'}): raise ValueError('Unknown note property')
                 for name, value in values.items():
-                    if name == 'slide':
-                        if type(value) is not bool: raise ValueError('slide must be boolean')
-                        row[1] = row[1] | 8 if value else row[1] & ~8
+                    if name in ('slide','porta','muted'):
+                        if type(value) is not bool: raise ValueError(name+' must be boolean')
+                        field,mask=(1,8) if name=='slide' else (9,16 if name=='porta' else 32)
+                        row[field]=row[field]|mask if value else row[field]&~mask
+                    elif name=='color':
+                        if type(value) is not int or not 0<=value<=15:raise ValueError('color must be integer 0..15')
+                        row[9]=(row[9]&~15)|value
                     else: row[fields[name]] = integer(value, name)
             if not 0 <= row[0] <= 0xffffffff or not 1 <= row[3] <= 0xffffffff or not 0 <= row[4] <= 131:
                 raise ValueError('Transform leaves FL note/time range')
@@ -102,6 +106,24 @@ def register(group, emit, json_option):
     from .flp import Project
     from .contracts import Result
     from .json_output import decode_json
+
+    @group.command('articulation')
+    @click.option('--project',required=True,type=click.Path(path_type=Path))
+    @click.option('--pattern',required=True,type=click.IntRange(1,999))
+    @click.option('--channel',type=click.IntRange(0))
+    @json_option
+    def inspect_articulation(project,pattern,channel):
+        """Read Slide/Portamento/mute/color without decoding raw flag bits."""
+        from .note_values import articulation
+        doc=Project.read(project)
+        if pattern not in doc.patterns():raise ValueError('Pattern is absent')
+        if channel is not None and channel>=len(doc.channels()):raise ValueError('Channel is absent')
+        rows=[{'note_index':i,**{k:n[k] for k in ('channel_index','key','start_tick','length_tick')},**articulation(n)}
+              for i,n in enumerate(doc.patterns()[pattern]['notes']) if channel is None or n['channel_index']==channel]
+        emit(Result(command='notes articulation',status='verified',verified_scopes=['saved_note_articulation'],
+                    data={'pattern_number':pattern,'channel_index':channel,'notes':rows,
+                          'semantics':['Slide notes steer existing same-color native voices and do not sound alone.',
+                                       'Note porta, channel portamento and a plugin glide mode are separate controls.']}))
 
     @group.command('transform')
     @click.option('--project', required=True, type=click.Path(path_type=Path))

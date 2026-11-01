@@ -1,0 +1,6 @@
+{
+  "id":"pluck-envelope","parent":"detuned-pair",
+  "description":"Short amplifier envelope on the native-saved oscillator branch",
+  "mechanisms":["Enabled native volume envelope","Decay into rhythmic gaps"],
+  "generator_design":{"volume_envelope":{"enabled":true,"predelay_raw":100,"attack_raw":100,"hold_raw":100,"decay_raw":10000,"sustain_raw":0,"release_raw":100}}
+}

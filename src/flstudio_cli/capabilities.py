@@ -50,8 +50,16 @@ def list_capabilities() -> list[dict]:
         'RMS-matched previews and signal/context occupancy are not listening or musical-quality scores'], 'docs/sound-design/validation.md')
     add('sound-design.apply_undo', 'persistence', 'flp_file', ['Resolve channel by IID and check its prior sound; new outputs preserve musical content',
         'Complete channel state plus exclusive-insert FX; shared inserts require --channel-only'], 'docs/sound-design/README.md')
-    add('sytrus.deep_design', 'audio', 'flp_file', ['Validated Default V2/V3 layouts only: FM/RM/OUT, ratio, SH, 32 harmonic coefficients and enabled four-point VOL envelope',
-        'Arbitrary presets, filters, free envelope points and hidden modulation are outside this adapter'], 'docs/sound-design/sytrus.md')
+    add('sytrus.deep_design', 'audio', 'flp_file', ['Validated Default V2/V3 layouts: FM/RM, OP-to-filter/FX/OUT/PAN, ratio, SH, 32 harmonics, four-point VOL and filter CUT envelopes',
+        'Arbitrary presets, filter-type/Send-to-next and free envelope topology remain outside the adapter'], 'docs/producer-1.2.md')
+    add('plugin.producer_design', 'audio', 'flp_file', ['Scoped 3xOsc wave/tuning/mix/envelope; Maximus band curves; WaveShaper curve/drive; Delay3 native controls and synced time',
+        'Default-derived layouts, not whole-plugin coverage; effect host transactions independently cold-check identities and values'], 'docs/producer-1.2.md')
+    add('plugin.embedded_audio', 'audio', 'flp_file', ['Edison/Slicex embedded PCM import/edit/export and cue regions, exact PCM through native save/cold reopen',
+        'CLI PCM operations are distinct from native Edison DSP; arbitrary Slicex mappings/articulators are not decoded'], 'docs/producer-1.2.md')
+    add('notes.articulation', 'audio', 'flp_file', ['Named slide/porta/muted/color preserve unrelated bits; native Slide/mono-portamento verified in Sytrus and 3xOsc',
+        'Slide length is transition time; same-color sounding voice required. Channel slide_raw is nonlinear, not ms; VST behavior is not universal'], 'docs/producer-1.2.md')
+    add('audio.analyze', 'audio', 'filesystem', ['Question-led pitch/envelope/harmonics/delay/overview with explicit ambiguity and next experiments; NumPy optional extra',
+        'Pitch assumes one voice, harmonic fit a stationary dry reference; no listening, quality score, LUFS or true-peak claim'], 'docs/audio-analysis.md', requires_desktop=False)
     add('project.plugin_identity', 'persistence', 'flp_file', ['Wrapper name/vendor/module path and raw class-ID bytes; plugin state remains opaque'])
     add('project.validate', 'offline_fixture', 'flp_file', ['Read-only structural and semantic checks; does not run FL or certify private plugin state'], 'docs/fullstack.md')
     add('project.snapshot', 'offline_fixture', 'flp_file', ['Bounded context output; omitted sections are explicit and can be requested independently'], 'docs/fullstack.md')

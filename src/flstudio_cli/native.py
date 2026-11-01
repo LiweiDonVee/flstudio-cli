@@ -152,12 +152,23 @@ def run_fl(executable: Path, arguments: list[str], workdir: Path, timeout=120) -
 
 
 def read_audio(path: Path) -> tuple[dict, list[float]]:
-    with wave.open(str(path), 'rb') as audio:
-        channels, width, rate, frames = audio.getnchannels(), audio.getsampwidth(), audio.getframerate(), audio.getnframes()
-        raw = audio.readframes(frames)
-    if width not in (1, 2, 3, 4) or len(raw) != frames * channels * width:
+    floating = False
+    try:
+        with wave.open(str(path), 'rb') as audio:
+            channels, width, rate, frames = audio.getnchannels(), audio.getsampwidth(), audio.getframerate(), audio.getnframes()
+            raw = audio.readframes(frames)
+    except wave.Error:
+        # Edison exports native IEEE float32 WAV. Keep the core integer-PCM
+        # path dependency-free; this path uses the installed sound-design extra.
+        from .sample_editors import decode
+        signal, rate = decode(path.read_bytes())
+        frames, channels = signal.shape
+        width, floating, values = 4, True, signal.ravel().tolist()
+    if not floating and (width not in (1, 2, 3, 4) or len(raw) != frames * channels * width):
         raise ValueError('Unsupported or truncated PCM output')
-    if width == 1:
+    if floating:
+        pass
+    elif width == 1:
         values = [(value - 128) / 128 for value in raw]
     elif width in (2, 4):
         values = [x / (2 ** (width * 8 - 1)) for x in array.array('h' if width == 2 else 'i', raw)]
@@ -179,6 +190,7 @@ def read_audio(path: Path) -> tuple[dict, list[float]]:
                                 'rms_dbfs': dbfs(channel_rms)})
     crest_factor = peak / rms if rms else 0.0
     return {'sample_rate': rate, 'channels': channels, 'sample_width': width, 'frames': frames,
+            'sample_format': 'float32' if floating else 'integer_pcm',
             'duration_seconds': frames / rate, 'peak': peak, 'rms': rms,
             'peak_dbfs': dbfs(peak), 'rms_dbfs': dbfs(rms),
             'crest_factor': crest_factor, 'channel_metrics': channel_metrics,

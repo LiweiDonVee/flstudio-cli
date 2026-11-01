@@ -1,0 +1,13 @@
+{
+  "id":"three-regions",
+  "description":"Default-derived ordered sample regions, verified by actual note triggering",
+  "mechanisms":["Embedded PCM","Three distinct source regions"],
+  "generator_design":{
+    "audio_file":"ABSOLUTE/edison-exported.wav",
+    "regions":[
+      {"name":"Low body","start_frame":0,"end_frame":30000,"key":60},
+      {"name":"Octave","start_frame":36082,"end_frame":54000,"key":61},
+      {"name":"Fifth","start_frame":60136,"end_frame":80000,"key":62}
+    ]
+  }
+}

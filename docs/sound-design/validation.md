@@ -1,5 +1,11 @@
 # Real sound-design validation — 2026-11-01
 
+The original1.1 acceptance below is retained. For1.2 native plugin expansion,
+Slide/mono-portamento, embedded sample exact restoration and mechanism controls,
+see [Producer validation](../producer-1.2.md) and
+[measured signal experiments](../audio-analysis.md). No new listening-quality
+claim is inferred from those measurements.
+
 ## Conditions and acceptance
 
 Actual FL Studio Producer **26.1.6.5639**, Sytrus from that installation, and

@@ -1,0 +1,6 @@
+{
+  "id":"native-glide",
+  "description":"Native monophonic glide on existing overlapping ordinary notes",
+  "mechanisms":["Native mono overlap glide with deliberately slow nonlinear slide control"],
+  "channel_settings":{"polyphony":{"mono":true,"porta":true,"slide_raw":1660}}
+}

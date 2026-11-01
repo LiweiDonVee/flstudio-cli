@@ -2,7 +2,7 @@
   "schema_version": 1,
   "accessed_on": "2026-11-01",
   "timezone": "Asia/Shanghai",
-  "scope": "Sytrus first; real-plugin sound design with Surge XT and 3xOsc comparisons",
+  "scope": "Sytrus primary; scoped Producer plugins, native articulation, signal experiments and prior generic Surge XT path",
   "copyright_policy": "Short original summaries and source URLs only; no source full texts are stored here.",
   "evidence_rule": "Research findings describe their experimental materials and tasks. Parameter mechanics, engineering approximations, practical recipes, and aesthetic judgements are separate claims. Audio features are not listening ground truth.",
   "sources": [
@@ -253,6 +253,111 @@
       "summary": "Interactions among partials help explain why different spectra suit different tunings and chord relationships. Sensory dissonance is a specific modeled concept; the same patch must be tested on actual intervals/chords.",
       "operational_impact": ["Test FM ratios in the intended harmony", "Separate slow beating, roughness and broadband noise", "Do not equate low modeled dissonance with better music"],
       "limitations": ["Summed-partial models omit many musical/contextual effects", "Author exposition is used here, not the unread scanned research PDF", "No fixed ratio guarantees pleasantness"]
+    },
+    {
+      "id": "P06",
+      "title": "Maximus official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/plugins/Maximus.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Three frequency bands and wideband Master, independent curves/gain/timing. Local adapter covers only the named curve banks and individually verified host controls.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P07",
+      "title": "WaveShaper official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/plugins/Fruity%20WaveShaper.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Input-to-output transfer graph and pre/mix/post mechanics. Local curve preserves polarity; audible result depends on actual drive range.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P08",
+      "title": "Delay3 official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/plugins/Fruity%20Delay%203.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Tempo-sync range1/48step..16steps, ping-pong and feedback. Raw serialized values need a separate verified map.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P09",
+      "title": "Edison official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/plugins/Edison.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Native sample-editor workflow and save/export; deterministic CLI PCM edits are not native Edison processing.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P10",
+      "title": "Slicex official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/plugins/Slicex.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Embedded slice/region import and key triggering; arbitrary articulator/custom mapping is not established by cue metadata.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P11",
+      "title": "Slide official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/pianoroll.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Native Piano Roll slide time follows slide-note length; native features are not universal VST pitch bend.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
+    },
+    {
+      "id": "P12",
+      "title": "Portamento official FL Studio online manual",
+      "url": "https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/chansettings_misc.htm",
+      "authors": [
+        "Image-Line"
+      ],
+      "version": "Online manual accessed2026-11-01; local execution FL26.1.6.5639",
+      "applicability": "Mono overlaps glide and the channel SLIDE knob sets transition; Mono is distinct from Max poly1.",
+      "evidence_category": "official_plugin_mechanics",
+      "read_scope": "Relevant controls/workflow sections; not all linked subpages or tutorial videos",
+      "limitations": [
+        "Manual semantics are distinct from private-state offset calibration and from subjective listening."
+      ]
     }
   ],
   "local_observations": [

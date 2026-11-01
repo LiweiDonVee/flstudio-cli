@@ -158,7 +158,15 @@ def _operation_lock(task_file, identifier):
 
 
 def _observe(bridge, target, changes):
-    info = bridge.call('cli_plugin_info', target)
+    try:
+        info = bridge.call('cli_plugin_info', target)
+    except RuntimeError as exc:
+        if str(exc)!='No plugin at the explicit target' or set(target)!={'channel'}:raise
+        kind=bridge.call('cli_api_call',{'module':'channels','function':'getChannelType','args':[target['channel'],True]})['value']
+        if kind!=0:raise
+        if changes:raise ValueError('Sampler has no generator-plugin parameter API; use channel_settings or its sample asset') from None
+        return {'identity':{'plugin':'Sampler','total':0,'location':'channel','index':target['channel'],'slot':-1,
+                            'index_scope':'global','channel_type':kind},'params':[]}
     values = []
     for at in range(0, len(changes), 128):
         values.extend(bridge.call('cli_plugin_read', {**target,'params':[c['param'] for c in changes[at:at+128]]})['params'])
@@ -172,6 +180,8 @@ def _design_fields(view):
     # semantic envelope/oscillator fields here; keep all raw observations and
     # compare the entire native blob separately across the cold reopen.
     return {'matrix':view['matrix'],'outputs':view['outputs'],
+            **{key:view[key] for key in ('routes','pan') if key in view},
+            'filters':[{**row,'cutoff_envelope':{k:v for k,v in row['cutoff_envelope'].items() if k!='host_scale_raw'}} for row in view.get('filters',[])],
             'operators':[{k:v for k,v in row.items() if k!='volume_envelope_points'} for row in view['operators']]}
 
 
@@ -185,6 +195,23 @@ def _design_equal(left,right):
     return left==right
 
 
+def _native_semantics(value):
+    if isinstance(value,dict):
+        return {k:_native_semantics(v) for k,v in value.items() if k not in ('profile','limitations','coordinate_units','spare_banks_preserved')}
+    if isinstance(value,list):return [_native_semantics(v) for v in value]
+    return value
+
+
+def _native_contains(planned,actual):
+    # A factory state can gain new host/envelope fields on native upgrade.
+    # Every planned musical field must still be retained exactly.
+    if isinstance(planned,dict) and isinstance(actual,dict):
+        return all(k in actual and _native_contains(v,actual[k]) for k,v in planned.items())
+    if isinstance(planned,list) and isinstance(actual,list):
+        return len(planned)==len(actual) and all(_native_contains(a,b) for a,b in zip(planned,actual))
+    return _design_equal(planned,actual)
+
+
 def _edit(project, channel, request):
     before_identity=project.channels()[channel]
     if request.get('plugin_preset'):
@@ -192,6 +219,9 @@ def _edit(project, channel, request):
     if request.get('sytrus_design'):
         from .sytrus_design import apply_design
         apply_design(project, channel, request['sytrus_design'])
+    if request.get('generator_design'):
+        from .stock_plugins import edit
+        edit(project,{'channel':channel},request['generator_design'])
     if request.get('sytrus'):
         from .sytrus import set_parameters
         set_parameters(project,channel,request['sytrus'])
@@ -212,6 +242,15 @@ def _edit(project, channel, request):
         if not isinstance(request['effect_params'],list) or any(not isinstance(item,dict) or set(item)-{'slot','param','value','value_raw'} for item in request['effect_params']):
             raise ValueError('Candidate effect_params choose only slot/param/value or value_raw on the target insert')
         apply_parameters(project,[{'track':track,**item} for item in request['effect_params']])
+    if request.get('effect_designs'):
+        from .stock_plugins import edit
+        if not exclusive_insert(project,channel):raise ValueError('Effect design requires a dedicated target insert')
+        track=project.channels()[channel]['mixer_track'];slots=set()
+        for item in request['effect_designs']:
+            if not isinstance(item,dict) or set(item)!={'slot','design'} or type(item['slot']) is not int or not 0<=item['slot']<10:
+                raise ValueError('Effect designs require slot (0..9) and design')
+            if item['slot'] in slots:raise ValueError('Duplicate effect design slot')
+            slots.add(item['slot']);edit(project,{'track':track,'slot':item['slot']},item['design'])
     from .sound_state import check_plugin_bindings
     check_plugin_bindings(project,channel,before_identity)
 
@@ -225,8 +264,8 @@ def _candidate(task_file: Path, request: dict, install=INSTALL, resume=False):
     from .sessions import start, save, stop_worker
     from .live import Bridge
     task = _task(task_file)
-    if not isinstance(request,dict) or set(request) - {'id','description','mechanisms','plugin_preset','params','sytrus','sytrus_design','channel_settings','channel_volume_raw','fx_chain','effect_params','resources','tradeoffs','parent'}:
-        raise ValueError('Candidate accepts id, description, mechanisms, plugin_preset/params/sytrus/sytrus_design/channel_settings/channel_volume_raw/fx_chain/effect_params/resources/tradeoffs/parent')
+    if not isinstance(request,dict) or set(request) - {'id','description','mechanisms','plugin_preset','params','sytrus','sytrus_design','generator_design','effect_designs','effect_host_params','channel_settings','channel_volume_raw','fx_chain','effect_params','resources','tradeoffs','parent'}:
+        raise ValueError('Unknown candidate field; use generator_design, effect_designs or effect_host_params for Producer plugin designs')
     if not isinstance(request.get('description'),str) or not request['description'].strip() or not isinstance(request.get('mechanisms'),list) or not request['mechanisms']:
         raise ValueError('Describe the candidate and its substantive synthesis/envelope/space mechanisms')
     changes = request.get('params', [])
@@ -240,6 +279,15 @@ def _candidate(task_file: Path, request: dict, install=INSTALL, resume=False):
         for key in ('value','expect'):
             if key in change and (type(change[key]) not in (int,float) or not math.isfinite(change[key]) or not 0 <= change[key] <= 1):
                 raise ValueError('Host parameter values/expectations must be finite normalized 0..1; consult plugin units instead of passing Hz or milliseconds directly')
+    effect_changes=request.get('effect_host_params',[])
+    if not isinstance(effect_changes,list) or len(effect_changes)>128:raise ValueError('effect_host_params must be an array of at most 128 targeted writes')
+    for item in effect_changes:
+        if (not isinstance(item,dict) or not {'slot','param','value'}<=set(item) or set(item)-{'slot','param','value','expect'} or
+                type(item['slot']) is not int or not 0<=item['slot']<10 or
+                type(item['param']) not in (str,int) or isinstance(item['param'],str) and not item['param'] or isinstance(item['param'],int) and item['param']<0):
+            raise ValueError('Effect host writes require slot, exact param name/index and value, with optional expect')
+        for key in ('value','expect'):
+            if key in item and (type(item[key]) not in (int,float) or not math.isfinite(item[key]) or not 0<=item[key]<=1):raise ValueError('Effect host values must be finite normalized 0..1')
     declared = request.get('resources', [])
     if not isinstance(declared,list) or any(not isinstance(p,str) or not Path(p).is_file() for p in declared):
         raise ValueError('Candidate resources must list existing files; locate missing samples/wavetables/IRs before designing')
@@ -307,7 +355,15 @@ def _candidate(task_file: Path, request: dict, install=INSTALL, resume=False):
                 from .sytrus import parameters
                 names={change['param'] for change in request['sytrus']}
                 report['planned_sytrus_host_controls']=[row for row in parameters(project,channel)['params'] if row['param'] in names or row['index'] in names]
+            native_targets=[]
+            if request.get('generator_design'):native_targets.append({'channel':channel})
+            if request.get('effect_designs'):native_targets.extend({'track':project.channels()[channel]['mixer_track'],'slot':item['slot']} for item in request['effect_designs'])
+            if native_targets:
+                from .stock_plugins import inspect as inspect_native
+                report['planned_native_designs']=[{'target':target,'design':inspect_native(project,target)} for target in native_targets]
+            if effect_changes and not exclusive_insert(project,channel):raise ValueError('Effect host writes require a dedicated target insert')
             working = project.save(folder/f'edit-{report["attempt"]}.flp')
+            report['planned_native_source']=str(working)
             worker = start(working,folder/f'worker-{report["attempt"]}',install)
             checkpoint('editing',worker=worker)
             bridge = Bridge(session=worker)
@@ -324,7 +380,17 @@ def _candidate(task_file: Path, request: dict, install=INSTALL, resume=False):
                 if job['state'] != 'verified':
                     raise ValueError('Host parameter write was not verified; inspect transactions and branch from the last saved parent')
             after = _observe(bridge,target,changes)
-            checkpoint('host_verified',host_before=before,host_after=after,transactions=transactions)
+            effect_after=[]
+            for slot in sorted({item['slot'] for item in effect_changes}):
+                effect_target={'track':project.channels()[channel]['mixer_track'],'slot':slot}
+                items=[{k:v for k,v in item.items() if k!='slot'} for item in effect_changes if item['slot']==slot]
+                effect_before=_observe(bridge,effect_target,items)
+                for at in range(0,len(items),32):
+                    queued=bridge.call('cli_plugin_apply',{**effect_target,'changes':items[at:at+32]})
+                    job=bridge.wait_plugin_job(queued['id'],len(items[at:at+32]));transactions.append(job)
+                    if job['state']!='verified':raise ValueError('Effect host write was not confirmed; inspect transaction readback')
+                effect_after.append({'target':effect_target,'before':effect_before,'after':_observe(bridge,effect_target,items),'changes':items})
+            checkpoint('host_verified',host_before=before,host_after=after,effect_host_after=effect_after,transactions=transactions)
             saved = save(worker,native)
             checkpoint('saved',saved=saved)
             stop_worker(worker); worker = None
@@ -352,6 +418,30 @@ def _candidate(task_file: Path, request: dict, install=INSTALL, resume=False):
         if not complete_state_equal:
             stable=False
             reason='reopened_complete_sound_state_mismatch'
+        for row in report.get('effect_host_after',[]):
+            observed=_observe(Bridge(session=worker),row['target'],row['changes'])
+            same=row['after']['identity']==observed['identity'] and [p['name'] for p in row['after']['params']]==[p['name'] for p in observed['params']]
+            same=same and all(abs(p['v']-item['value'])<=.0001 for p,item in zip(observed['params'],row['changes']))
+            row.update(reopened=observed,verified_after_reopen=same);stable=stable and same
+            if not same:reason='reopened_effect_host_value_or_identity_mismatch'
+        if report.get('planned_native_designs'):
+            from .stock_plugins import inspect as inspect_native
+            native_rows=[]
+            for row in report['planned_native_designs']:
+                saved_view=inspect_native(before_doc,row['target']);cold_view=inspect_native(after_doc,row['target'])
+                same=_native_contains(_native_semantics(row['design']),_native_semantics(saved_view)) and _design_equal(_native_semantics(saved_view),_native_semantics(cold_view))
+                if row['design']['plugin'] in ('Edison','Slicex'):
+                    from .sample_editors import equivalent
+                    from .plugin_state import events
+                    planned_doc=Project.read(report['planned_native_source'])
+                    wanted=events(planned_doc,row['target'])[1][213].data
+                    saved_data=events(before_doc,row['target'])[1][213].data
+                    cold_data=events(after_doc,row['target'])[1][213].data
+                    same=same and equivalent(row['design']['plugin'],wanted,saved_data) and equivalent(row['design']['plugin'],saved_data,cold_data)
+                native_rows.append({'target':row['target'],'planned':row['design'],'saved':saved_view,'reopened':cold_view,'verified':same})
+                stable=stable and same
+                if not same:reason='saved_native_design_mismatch'
+            report['native_design_checks']=native_rows
         if report.get('planned_design'):
             from .sytrus_design import inspect_design
             saved_design=inspect_design(before_doc,channel)
@@ -552,11 +642,29 @@ def support(project,channel):
             deep={'available_on_current_state':True,'profile':observed['profile']}
         except ValueError as exc:
             deep={'available_on_current_state':False,'reason':str(exc),'next_action':'Intentionally init a new candidate from local Default, or use native UI/capture; do not patch this preset layout'}
-        deep.update(operations=['6x6 FM/RM operator matrix','direct operator OUT','operator ratio','SH modifier','first32 harmonic coefficients','four-point volume envelope with explicit enable'],limitations=LIMITATIONS)
+        deep.update(operations=['6x6 FM/RM operator matrix','OP-to-filter, FX/OUT sends and source PAN','operator ratio','SH modifier','first32 harmonic coefficients','four-point volume and filter CUT envelopes with explicit enable'],limitations=LIMITATIONS)
         limitations.append('Deep Sytrus design is restricted to the explicitly validated native layouts/fields; matrix knobs are not host automation parameters')
+    elif plugin in ('3x Osc','Slicex'):
+        from .stock_plugins import inspect
+        adapter='scoped-native-design + generic-host'
+        try:
+            observed=inspect(doc,{'channel':channel})
+            deep={'available_on_current_state':True,'profile':observed.get('profile',plugin),'limitations':observed['limitations']}
+        except ValueError as exc:
+            deep={'available_on_current_state':False,'reason':str(exc),'next_action':'Use a supported Default-derived state, or native UI/capture'}
     elif plugin=='Surge XT':
         limitations.append('FM routing/oscillator/filter enum values are plugin-version-specific; normalized continuous values are not physical units')
-    return {'plugin':plugin,'target':info,'adapter':adapter,'deep_adapter':deep if plugin.casefold()=='sytrus' else None,'evidence_layers':layers,'limitations':limitations,
+    effects=[]
+    from .stock_plugins import inspect
+    for effect in doc.mixer()[info['mixer_track']]['plugins']:
+        row={'slot':effect['slot'],'plugin':effect['name']}
+        try:
+            observed=inspect(doc,{'track':info['mixer_track'],'slot':effect['slot']})
+            row.update(scoped_design_available=True,limitations=observed['limitations'])
+        except ValueError as exc:
+            row.update(scoped_design_available=False,reason=str(exc))
+        effects.append(row)
+    return {'plugin':plugin,'target':info,'adapter':adapter,'deep_adapter':deep if plugin.casefold()=='sytrus' or plugin in ('3x Osc','Slicex') else None,'effect_adapters':effects,'evidence_layers':layers,'limitations':limitations,
             'dedicated_insert':exclusive_insert(doc,channel),'resources':resources(doc,Path(project).parent)}
 
 

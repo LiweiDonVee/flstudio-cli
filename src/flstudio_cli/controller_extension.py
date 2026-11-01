@@ -5,7 +5,7 @@ import math
 import os
 import time
 
-REVISION = 'flstudio-cli-fullstack-6'
+REVISION = 'flstudio-cli-fullstack-7'
 PREFIX = b'\x7dFCL'
 PARAM_LABELS = {
     'Emphasizer': {'杈撳叆澧炵泭': '输入增益', '鐢靛钩鍖归厤': '电平匹配',
@@ -538,6 +538,10 @@ def install(handlers, namespace=None):
     def save_project(params):
         if owner_marker() is None:
             raise ValueError('Automatic saving requires an explicitly owned session')
+        # FPT_Save is focus-sensitive: Slicex/Edison can interpret it as
+        # "save sample" and open a WAV dialog instead of saving the FLP.
+        api_modules['ui'].showWindow(2)
+        api_modules['ui'].setFocused(2)
         api_modules['transport'].globalTransport(api_modules['midi'].FPT_Save, 1)
         return {'requested': True}
 

@@ -1,0 +1,28 @@
+{
+  "description": "Dotted eighth stereo echo from the same phrase",
+  "effect_designs": [
+    {
+      "design": {
+        "controls_raw": {
+          "feedback": 2000,
+          "model": 2,
+          "output_dry": 6000,
+          "output_wet": 2800
+        },
+        "time_steps": 3
+      },
+      "slot": 0
+    }
+  ],
+  "fx_chain": [
+    {
+      "preset": "C:\\Program Files\\Image-Line\\FL Studio 2026\\Data\\Patches\\Plugin presets\\Effects\\Fruity Delay 3\\Default.fst",
+      "slot": 0
+    }
+  ],
+  "id": "delay3",
+  "mechanisms": [
+    "Three synchronized sixteenth steps",
+    "Ping-pong model and controlled feedback"
+  ]
+}
